@@ -10,7 +10,12 @@ export function phraseMelody(bars, seed, syncopation = .1) {
       const displaced = ((seed + index * 7 + beat * 3) >>> 0) % 10 < syncopation * 10;
       if (!displaced) {
         if (index === 3 && beat === 3) return `[${a}@2 ~@2]`;
-        return b === '~' ? `[${a}@4]` : `[${a}@2 ${b}@2]`;
+        // Alternate sustained calls, short answers and breathing spaces without
+        // adding subdivisions or moving the downbeat.
+        if (b === '~') return type === 2 && index % 2 ? `[${a}@2 ~@2]` : `[${a}@4]`;
+        if (type === 0 && beat === 0 && index % 2 === 0) return `[${a}@4]`;
+        if (type === 2 && index % 2) return `[${a}@2 ~ ${b}]`;
+        return `[${a}@2 ${b}@2]`;
       }
       if (index === 3 && beat === 3) return `[${a}@3 ~]`;
       if (type === 0) return `[${a}@3 ${b}]`;

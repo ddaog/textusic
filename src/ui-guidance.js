@@ -1,3 +1,4 @@
+import { MUSIC_MATERIAL_COUNTS as MATERIALS } from './music-materials.js';
 // Presentation-only selection: every relationship still reaches the music engine.
 export function quietConnections(edges, count, compact = false) {
   const priority = edge => edge.provisional ? 5 : edge.type === 'patch' ? 0
@@ -29,7 +30,7 @@ export const MUSIC_TIPS = [
   { topic:'단어끼리 아는 사이', text:'선은 문장 속 관계나 닮은 말, 음악적 연결을 보여줘요. 화면에 다 그리진 않지만, 안 보이는 관계도 음악에는 참여해요.' },
   { topic:'문장으로 케이블 꽂기', text:'모듈러 신스는 작은 악기들을 선으로 잇죠. 여기서는 문장끼리 음색·음높이·타이밍을 나눠요. 케이블 정리는 저희가 할게요.' },
   { topic:'선마다 맡은 일이 있어요', text:'문장 사이의 초록 선은 음색의 밝기를, 주황 선은 소리 낼 타이밍을, 보라 선은 음높이 패턴을 나눠요. 조용한 팀플이죠.' },
-  { topic:'몇 곡이나 나올까요', text:'화음 흐름 4종, 멜로디 모양 6종, 드럼 계열 8종이 기본 재료예요. 단어와 어순도 섞여서, 곱셈만으로 곡 수를 딱 세기는 어려워요.' },
+  { topic:'몇 곡이나 나올까요', text:`화음 흐름 ${MATERIALS.harmony}종, 멜로디 모양 ${MATERIALS.melody}종, 드럼 계열 ${MATERIALS.rhythm}종, 배경 화음 색깔 ${MATERIALS.pad}종. 재료만 곱하면 ${(MATERIALS.harmony*MATERIALS.melody*MATERIALS.rhythm*MATERIALS.pad).toLocaleString('ko-KR')}조합! 단어와 규칙이 함께 고르니, 모두 다른 곡이라는 뜻은 아니에요.` },
   { topic:'같은 글, 다른 산책', text:'‘변주’를 누르면 같은 문장으로 다른 길을 걸어요. 가끔 익숙한 풍경도 나와요. 무한 랜덤보다는 이유 있는 반복에 가까워요.' },
   { topic:'엔터 두 번, 다음 장면', text:'빈 줄로 나누면 각 연이 4마디씩 돌아가요. 빠르기는 함께 맞추고, 분위기는 각자 맡아요. 마지막엔 첫 연으로 돌아옵니다.' },
   { topic:'일단 한 단어만', text:'단어를 더하면 화음과 베이스, 리듬이 하나씩 합류해요. 쉼표와 마침표는 숨 쉴 틈을 보태고요. 문장도 가끔 쉬어야죠.' },

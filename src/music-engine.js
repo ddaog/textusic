@@ -1,5 +1,6 @@
 import { createRhythm } from './rhythm.js';
 import { ambientHarmony } from './ambient-harmony.js';
+import { CHORD_PROGRESSIONS, MELODY_CONTOURS } from './music-materials.js';
 import { phraseMelody } from './melody-rhythm.js';
 import { wordOrderSyncopation } from './word-order-rhythm.js';
 import { configurePlaybackSession } from './audio-session.js';
@@ -19,8 +20,8 @@ export function createArrangement(analysis, beat = {}) {
   const minor = fearCount > 0 || sadnessCount > 0 || anchor.some((id) => ['moon', 'darkness', 'dream', 'sadness', 'fear'].includes(id));
   const scale = minor ? 'minor' : 'major';
   const seed = analysis.seed >>> 0;
-  const chords = tension ? [0, 1, 5, 4] : [[0,5,3,4], [0,3,5,4], [0,4,5,3], [0,5,1,4]][(seed >>> 8) % 4];
-  const contour = [[0,2,4,2,6,4,2,0], [0,4,2,6,4,2,6,0], [4,2,0,2,6,4,2,0], [0,2,6,4,2,4,6,0], [2,0,4,6,4,0,2,0], [0,6,4,2,4,6,2,0]][(seed >>> 12) % 6];
+  const chords = tension ? [0, 1, 5, 4] : CHORD_PROGRESSIONS[(seed >>> 8) % CHORD_PROGRESSIONS.length];
+  const contour = MELODY_CONTOURS[(seed >>> 12) % MELODY_CONTOURS.length];
   const rotation = analysis.seed % 3;
   const modifiers = analysis.syntax?.edges?.filter((edge) => edge.type === 'modifier').length ?? 0;
   const relationships = analysis.syntax?.edges ?? [];

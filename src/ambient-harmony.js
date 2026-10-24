@@ -1,5 +1,5 @@
 // Scale degrees, not semitones: preserve the stanza's existing major/minor mode.
-const COLORS = [[0,2,4,6], [0,2,4,8], [0,1,4,8], [0,2,6,8]];
+import { PAD_COLORS as COLORS } from './music-materials.js';
 const motion = (a,b) => a.reduce((sum,n,i)=>sum+Math.abs(n-b[i]),0);
 
 export function ambientHarmony(chords, seed, tension = 0) {

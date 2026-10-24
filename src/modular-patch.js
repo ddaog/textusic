@@ -1,11 +1,13 @@
 import { phraseMelody } from './melody-rhythm.js';
 import { wordOrderSyncopation } from './word-order-rhythm.js';
+import { MELODY_CONTOURS } from './music-materials.js';
 // A bounded, feed-forward control patch. Audio stays VCO -> VCF -> VCA -> mixer.
 // Pitch/gate sequences are clocked CV equivalents, not a voltage simulator.
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 export function createModularPatch(analysis) {
   const words = analysis.syntax?.words ?? [];
   const groups = [...new Set(words.map((word) => word.sentence))].slice(0, 8);
+  const contour = MELODY_CONTOURS[((analysis.seed >>> 0) >>> 12) % MELODY_CONTOURS.length];
   const modules = groups.map((sentence, id) => {
     const members = words.filter((word) => word.sentence === sentence);
     const meanings = members.map((word) => analysis.tokenMeanings.find((item) => item.token === word.token)).filter(Boolean);
@@ -19,7 +21,7 @@ export function createModularPatch(analysis) {
       attack:clamp(.02 + axis('softness') * .1, .008, .15),
       period:axis('motion') > .55 ? 2 : axis('motion') > .25 ? 4 : 8,
       gate:Array.from({length:8}, (_, step) => syncopation < .35 ? step % 2 === 0 || (density > 4 && step === 3) : ((step * 5 + seed % 2) % 8) < density),
-      pitch:Array.from({length:8}, (_, step) => [0, 2, 4, 6][(step + seed) % 4]),
+      pitch:Array.from({length:8}, (_, step) => contour[(step + (id % 2 ? 2 : 0)) % 8]),
       oscillator:meanings.some((word) => word.conceptIds.some((id) => ['fear', 'anger'].includes(id))) ? 'sawtooth' : 'triangle',
     };
   });

@@ -27,3 +27,22 @@ Verification: deterministic voice-count/register tests, full project tests,
 production build, and real browser Pattern evaluation (16 pad onsets in four
 bars, no evaluation error). These checks do not establish subjective audio quality
 or physical iPhone performance. Listening and further iteration remain important.
+
+## Shared melodic and rhythmic materials
+
+The harmony skill's common-tone principle now informs twelve melodic contours:
+simple and modular voices use the same first-stanza seed, with alternating
+modules answering the motif two steps later. Later stanzas retain that seed,
+root and tempo while their emotional shading can change. The texture skill's
+use of space informs sustained calls, short answers and deliberate rests.
+
+Twelve sparse drum skeletons keep their first kick on the downbeat. Poetic word
+order can add pickups rather than replace the foundational groove. Additional
+hat probability is reduced. No new audio layers, samples, effects or AI work
+are introduced; existing voice limits and subdivisions remain bounded. This
+does not substitute for physical iPhone performance measurements.
+
+The UI derives counts from the generator's shared catalogs: four progressions,
+twelve contours, twelve grooves and four pad colors give 2,304 theoretical
+ingredient combinations. These are not guaranteed independently reachable or
+audibly distinct songs: text, seeds and emotional rules constrain selection.
