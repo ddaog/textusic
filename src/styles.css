@@ -929,7 +929,10 @@ body {
   border-bottom-color: rgba(239, 235, 226, .09);
 }
 
-.brand { font-size: 13px; }
+.brand { font-size: 13px; min-width:0; }
+.brand-name { letter-spacing:-.025em; line-height:1.5; word-break:keep-all; }
+.site-header { gap:12px; }
+.site-header .project-meta { flex-shrink:0; }
 .brand-mark { transform: scale(.8); transform-origin: left center; margin-right: -5px; }
 .project-meta { gap: 9px; font-size: 9px; }
 
@@ -1316,6 +1319,9 @@ footer { min-height:28px; }
 @media (max-width:600px) {
   .page-shell { padding-inline:12px; }
   .site-header { min-height:42px; }
+  .brand { gap:6px; font-size:12px; }
+  .brand-mark { flex-shrink:0; }
+  .site-header .project-meta { gap:5px; font-size:8px; }
   .hero-grid { grid-template-columns:minmax(0,1fr); gap:10px; }
   .copy-panel { padding-top:12px; }
   .composer { gap:8px; }
