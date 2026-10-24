@@ -2,6 +2,7 @@ import './styles.css';
 import './reading.css';
 import './code-layout.css';
 import { MusicRecorder } from './music-recorder.js';
+import { VideoRecorder } from './video-recorder.js';
 import { AudioSpectrum } from './audio-spectrum.js';
 import { createStanzaScore, stanzaPosition } from './stanzas.js';
 import { readDraft, saveDraft, semanticStartupDelay, interruptedSemanticPreparation, markSemanticPreparation } from './session-safety.js';
@@ -83,8 +84,33 @@ const recording = new MusicRecorder((blob, extension) => {
   document.querySelector('#record-button').textContent = recording.active ? '■ 녹음 끝내기' : '● 음악 녹음';
 });
 const spectrum = new AudioSpectrum();
+let videoUrl;
+let videoFile;
+const videoButton = document.querySelector('#video-record-button');
+const videoStatus = document.querySelector('#video-record-status');
+const videoPreview = document.querySelector('#video-preview');
+const videoShare = document.querySelector('#video-share');
+const videoRecording = new VideoRecorder((blob, extension) => {
+  videoPreview.pause(); videoPreview.removeAttribute('src'); videoPreview.load();
+  if (videoUrl) URL.revokeObjectURL(videoUrl);
+  videoUrl = URL.createObjectURL(blob);
+  videoFile = new File([blob], `ambient-for-poets-${Date.now()}.${extension}`, { type: blob.type });
+  videoPreview.src = videoUrl;
+  const link = document.querySelector('#video-save');
+  link.href = videoUrl; link.download = videoFile.name;
+  document.querySelector('#video-result').hidden = false;
+  videoShare.hidden = !navigator.canShare?.({ files: [videoFile] });
+  updateVideoStatus('영상 완성 · 미리보기 후 공유하거나 저장하세요');
+}, updateVideoStatus);
+function updateVideoStatus(status) {
+  videoStatus.textContent = status;
+  videoButton.textContent = videoRecording.active ? '■ 영상 끝내기' : '○ 영상 저장';
+  videoButton.disabled = videoRecording.busy && !videoRecording.active;
+  document.querySelector('#record-button').disabled = videoRecording.busy;
+}
 engine.onOutput = (output) => {
   recording.connect(output);
+  videoRecording.connect(output);
   try { spectrum.connect(output); } catch { /* Visualization must never interrupt music. */ }
 };
 let variation = 0;
@@ -463,6 +489,7 @@ function stopPlayback(message = '연주를 멈췄어요. 문장을 바꾸거나 
   engine.stop();
   spectrum.setActive(false);
   recording.stop();
+  videoRecording.stop();
   visualizer.setPlaying(false);
   updatePlaybackStatus();
   elements.status.textContent = message;
@@ -602,6 +629,7 @@ document.querySelector('#beat-mode').addEventListener('change', (event) => {
 });
 
 document.querySelector('#record-button').addEventListener('click', async (event) => {
+  if (videoRecording.busy) return;
   if (recording.active) { recording.stop(); return; }
   if (!elements.sentence.value.trim()) { elements.sentence.focus(); document.querySelector('#record-status').textContent = '먼저 문장을 입력해주세요'; return; }
   event.currentTarget.disabled = true;
@@ -615,7 +643,38 @@ document.querySelector('#record-button').addEventListener('click', async (event)
   } catch (error) { document.querySelector('#record-status').textContent = error.message; }
   finally { document.querySelector('#record-button').disabled = false; }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) recording.stop(); });
+videoButton.addEventListener('click', async () => {
+  if (videoRecording.active) { videoRecording.stop(); return; }
+  if (videoRecording.busy) return;
+  if (recording.recorder) { videoStatus.textContent = '음악 녹음을 끝낸 뒤 영상 저장을 시작해주세요.'; return; }
+  if (!elements.sentence.value.trim()) { elements.sentence.focus(); videoStatus.textContent = '먼저 문장을 입력해주세요.'; return; }
+  if (!engine.playing) { videoStatus.textContent = '재생 버튼으로 음악을 시작한 뒤 영상 저장을 눌러주세요.'; return; }
+  videoButton.disabled = true;
+  document.querySelector('#record-button').disabled = true;
+  try {
+    videoPreview.pause();
+    if (!engine.playing || document.hidden) throw new Error('화면을 열고 음악을 재생한 뒤 다시 시도해주세요.');
+    const module = await engine.module;
+    videoRecording.start(module.getAudioContext(), module.getSuperdoughAudioController().output.destinationGain,
+      document.querySelector('#visualizer'), () => {
+        const score = engine.score;
+        const sections = score?.sections ?? [];
+        const position = stanzaPosition(engine.repl?.scheduler.now() ?? 0, sections.length || 1);
+        return { text: sections[position.index]?.text ?? score?.text ?? elements.sentence.value,
+          label: `지금 ${position.index + 1}연 / ${sections.length || 1} · ${position.bar}/4 마디` };
+      });
+    document.querySelector('#video-result').hidden = true;
+  } catch (error) { updateVideoStatus(error.message); }
+  finally { videoButton.disabled = videoRecording.busy && !videoRecording.active; document.querySelector('#record-button').disabled = videoRecording.busy; }
+});
+window.addEventListener('formyiru:cycle', () => videoRecording.frame(performance.now()));
+videoShare.addEventListener('click', async () => {
+  if (!videoFile) return;
+  try { await navigator.share({ files: [videoFile] }); }
+  catch (error) { if (error.name !== 'AbortError') videoStatus.textContent = '공유하지 못했어요. 영상 파일 저장을 이용해주세요.'; }
+});
+videoPreview.addEventListener('play', () => { if (engine.playing) stopPlayback('저장한 영상을 미리 보고 있어요.'); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { recording.stop(); videoRecording.stop(); } });
 
 function setSemanticEnabled(enabled) {
   clearTimeout(semanticStartup);

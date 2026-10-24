@@ -10,6 +10,11 @@
 .record-controls button, .record-controls a { padding:8px 10px; border:1px solid #cdd5c9; border-radius:5px; color:#6e7f6b; background:transparent; font:10px var(--sans); cursor:pointer; text-decoration:none; }
 .record-controls a { background:#e1e9dc; }
 .record-controls [hidden] { display:none; }
+.record-controls button:disabled { opacity:.45; cursor:wait; }
+#video-result { width:100%; padding:12px 0; }
+#video-preview { display:block; width:min(100%,270px); max-height:480px; border-radius:10px; background:#e6e8e3; }
+.video-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+#video-result p { max-width:420px; line-height:1.6; }
 .reading-dialog .code-wrap pre { font-size:12px; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; tab-size:2; }
 @media(max-width:600px) {
   .live-code-panel .live-code-scroll { height:180px; padding:12px 0; }
