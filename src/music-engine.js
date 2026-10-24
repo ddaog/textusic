@@ -1,4 +1,5 @@
 import { createRhythm } from './rhythm.js';
+import { phraseMelody } from './melody-rhythm.js';
 import { configurePlaybackSession } from './audio-session.js';
 import { blendPatterns, transitionWindow } from './semantic-transition.js';
 import { createModularPatch, compileModularVoices, patchDescriptions } from './modular-patch.js';
@@ -15,8 +16,9 @@ export function createArrangement(analysis, beat = {}) {
   const tension = fearCount ? clamp(.45 + fearCount * .12 + analysis.axes.tension * .25, 0, 1) : 0;
   const minor = fearCount > 0 || sadnessCount > 0 || anchor.some((id) => ['moon', 'darkness', 'dream', 'sadness', 'fear'].includes(id));
   const scale = minor ? 'minor' : 'major';
-  const chords = tension ? [0, 1, 5, 4] : [0, 5, 3, 4];
-  const contour = [0, 2, 4, 2, 6, 4, 2, 0];
+  const seed = analysis.seed >>> 0;
+  const chords = tension ? [0, 1, 5, 4] : [[0,5,3,4], [0,3,5,4], [0,4,5,3], [0,5,1,4]][(seed >>> 8) % 4];
+  const contour = [[0,2,4,2,6,4,2,0], [0,4,2,6,4,2,6,0], [4,2,0,2,6,4,2,0], [0,2,6,4,2,4,6,0], [2,0,4,6,4,0,2,0], [0,6,4,2,4,6,2,0]][(seed >>> 12) % 6];
   const rotation = analysis.seed % 3;
   const modifiers = analysis.syntax?.edges?.filter((edge) => edge.type === 'modifier').length ?? 0;
   const relationships = analysis.syntax?.edges ?? [];
@@ -31,10 +33,10 @@ export function createArrangement(analysis, beat = {}) {
     return notes.join(' ');
   });
   const active = count < 3 ? [0, 4] : count < 6 ? [0, 2, 4, 6] : [0, 1, 2, 4, 5, 6];
-  const melody = chords.map((root) => contour.map((_, step) => {
+  const melody = chords.map((root, bar) => contour.map((_, step) => {
     if (!active.includes(step)) return '~';
     if (analysis.punctuation > 1 && step === 6) return '~';
-    const tone = contour[(step + rotation * 2) % contour.length];
+    const tone = bar === 3 && step === 6 ? 0 : contour[(step + rotation * 2 + (bar % 2 ? 2 : 0)) % contour.length];
     return String(root + tone);
   }).join(' '));
   const mode = beat.mode ?? 'auto';
@@ -55,6 +57,7 @@ export function createArrangement(analysis, beat = {}) {
 export function createStrudelCode(analysis, beat = {}, { foundation } = {}) {
   const arrangement = createArrangement(foundation ? { ...foundation, syntax: analysis.syntax } : analysis, beat);
   const { chords, melody, richness, drums } = arrangement;
+  const phrasedMelody = phraseMelody(melody, (foundation ?? analysis).seed);
   const { tension, rhythm } = arrangement;
   const root = foundation?.root ?? analysis.root;
   const scale = root + '4:' + arrangement.scale;
@@ -68,7 +71,7 @@ export function createStrudelCode(analysis, beat = {}, { foundation } = {}) {
   const chordPattern = '<' + chords.map((root) => '[' + [root, root + 2, root + 4, root + 6].join(',') + ']').join(' ') + '>';
   const bass = alternate(chords.map((root) => root + ' ~ ~ ~ ' + root + ' ~ ' + (richness > 0.65 ? root + 4 : '~') + ' ~'));
   const parts = [
-    'n("' + alternate(melody) + '").scale("' + scale + '").s("' + (tension ? 'sawtooth' : 'triangle') + '").lpf(' + Math.round(cutoff + tension * 900) + ').attack(' + attack + ').decay(.22).sustain(.12).release(' + (tension ? '.14' : '.35') + ').room(' + room + ').delay(.12).delaytime(.375).delayfeedback(.22).gain(' + gain(arrangement.melodyGain * (1 - tension * .3)) + ')',
+    'n("' + alternate(phrasedMelody) + '").scale("' + scale + '").s("' + (tension ? 'sawtooth' : 'triangle') + '").lpf(' + Math.round(cutoff + tension * 900) + ').attack(' + attack + ').decay(.22).sustain(.12).release(' + (tension ? '.14' : '.35') + ').room(' + room + ').delay(.12).delaytime(.375).delayfeedback(.22).gain(' + gain(arrangement.melodyGain * (1 - tension * .3)) + ')',
     'n("' + chordPattern + '").scale("' + padScale + '").s("triangle").lpf(950).attack(.5).decay(.4).sustain(.28).release(.65).room(' + room + ').gain(' + gain(arrangement.padGain) + ')',
     'n("' + bass + '").scale("' + bassScale + '").s("sine").lpf(430).attack(.015).decay(.24).sustain(.1).release(.12).gain(' + gain(arrangement.bassGain) + ')',
     'n("' + alternate(chords.map((root) => '~ ~ ' + (root + 11) + ' ~ ~ ~ ' + (root + 9) + ' ~')) + '").scale("' + scale + '").s("sine").attack(.01).decay(.1).sustain(0).release(.18).room(.4).gain(' + gain(arrangement.sparkleGain) + ')',
@@ -142,7 +145,7 @@ export class MusicEngine {
     await this.initializing;
   }
 
-  async play(code, { semantic = false } = {}) {
+  async play(code, { semantic = false, score } = {}) {
     configurePlaybackSession();
     const revision = ++this.revision;
     await this.init();
@@ -150,7 +153,7 @@ export class MusicEngine {
     const context = this.audioModule.getAudioContext?.();
     if (context && context.state !== 'running') await context.resume();
     if (revision !== this.revision) return;
-    if (this.playing && code === this.lastCode) return;
+    if (this.playing && code === this.lastCode) { this.score = score; return; }
     // Global hush is replaced by Strudel's evaluation scope with a pattern
     // reset helper. Keep the actual REPL transport instead of using globals.
     this.semanticUpdate = semantic;
@@ -164,6 +167,7 @@ export class MusicEngine {
     if (revision !== this.revision) { this.repl.stop(); return; }
     this.playing = true;
     this.lastCode = code;
+    this.score = score;
   }
 
   stop() {

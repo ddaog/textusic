@@ -1,3 +1,4 @@
+import { phraseMelody } from './melody-rhythm.js';
 // A bounded, feed-forward control patch. Audio stays VCO -> VCF -> VCA -> mixer.
 // Pitch/gate sequences are clocked CV equivalents, not a voltage simulator.
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -52,7 +53,7 @@ export function compileModularVoices(patch, { chords, root, scale }) {
     const cutoff = modulation
       ? `sine.slow(${patch.modules[modulation.source].period}).range(${Math.round(module.cutoff * (1 - modulation.depth))},${Math.round(module.cutoff * (1 + modulation.depth))})`
       : String(module.cutoff);
-    const notes = alternate(chords.map((chord) => gate.gate.map((open, step) => open ? chord + pitch.pitch[step] : '~').join(' ')));
+    const notes = alternate(phraseMelody(chords.map((chord) => gate.gate.map((open, step) => open ? chord + pitch.pitch[step] : '~').join(' ')), gate.id * 37));
     // Bounded mixer headroom; patching a control cannot raise the gain ceiling.
     const gain = (.115 / Math.sqrt(patch.modules.length)).toFixed(3);
     return `n("${notes}").scale("${root}4:${scale}").s("${module.oscillator}").lpf(${cutoff}).attack(${module.attack.toFixed(3)}).decay(.18).sustain(.12).release(.22).room(.2).gain(${gain}) /* M${module.id + 1}: VCO > VCF > VCA */`;

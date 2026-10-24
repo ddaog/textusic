@@ -1374,3 +1374,6 @@ footer { min-height:28px; }
   .live-code-panel .live-code-scroll { height:min(174px, calc(var(--pattern-rows, 1) * 18px + 12px)); }
   .compact-viewport .live-code-panel .live-code-scroll { height:66px; }
 }
+.stanza-status { grid-column:1/-1; margin:0; color:#758378; font:10px/1.6 var(--mono); letter-spacing:.04em; }
+.composer .word-token.is-playing-stanza { background-color:#879d801a; border-radius:3px; box-shadow:0 2px 0 #879d8055; }
+@media(prefers-reduced-motion:no-preference) { .word-token { transition:background-color .5s, box-shadow .5s; } }

@@ -2,6 +2,7 @@ import './styles.css';
 import './reading.css';
 import './code-layout.css';
 import { MusicRecorder } from './music-recorder.js';
+import { createStanzaScore, stanzaPosition } from './stanzas.js';
 import { readDraft, saveDraft, semanticStartupDelay } from './session-safety.js';
 import { SemanticClient } from './semantic-client.js';
 import { addMeaningLinks } from './meaning-links.js';
@@ -80,6 +81,7 @@ analysis.bpm = initialArrangement.bpm;
 analysis.scale = initialArrangement.scale;
 let code = createStrudelCode(analysis, beat);
 const visualizer = new Visualizer(elements.canvas, analysis);
+visualizer.playbackCycle = () => engine.playing ? Math.max(0, engine.repl.scheduler.now() % 1) : 0;
 let updateTimer;
 let audioTask = null;
 let audioRevision = 0;
@@ -91,6 +93,9 @@ let semanticState = { text: '', meanings: {}, similarities: [] };
 let semanticReady = false;
 let musicFoundation = null;
 let semanticTransitionCode = null;
+let stanzaScore = createStanzaScore(elements.sentence.value, variation, beat);
+if (stanzaScore.sections.length > 1) { code = stanzaScore.code; analysis.bpm = stanzaScore.bpm; }
+let stanzaIndicatorKey = '';
 function updateSemanticSummary() {
   if (!semanticReady) return;
   const words = analysis.tokenMeanings.filter((word) => word.meaningSource === 'embedding').length;
@@ -276,6 +281,7 @@ function renderWordHighlight() {
     const meaning = tokens.get(rawToken) ?? committed ?? { token: rawToken, primaryConcept: 'unique', layer: 'near', traits: {} };
     const profile = visualProfileForToken(meaning?.primaryConcept, meaning?.token ?? match[0], meaning?.traits);
     word.className = 'word-token';
+    word.dataset.start = String(start);
     word.dataset.meaningSource = meaning.meaningSource ?? 'phonetic';
     word.dataset.effect = profile.effect;
     word.dataset.layer = meaning?.layer ?? 'near';
@@ -359,8 +365,15 @@ function analyzeCurrentText({ keepVariation = false, refreshSemantics = true, se
   analysis.bpm = arrangement.bpm;
   analysis.scale = arrangement.scale;
   code = createStrudelCode(analysis, beat, { foundation: musicFoundation });
+  stanzaScore = createStanzaScore(text, variation, beat, semanticClient.enabled ? semanticState : {}, semanticUpdate ? stanzaScore : undefined);
+  if (stanzaScore.sections.length > 1) {
+    code = stanzaScore.code;
+    analysis.bpm = stanzaScore.bpm;
+  }
   semanticTransitionCode = semanticUpdate ? code : null;
   renderAnalysis();
+  stanzaIndicatorKey = '';
+  updateStanzaIndicator();
   if (refreshSemantics) semanticClient.request(text, analysis.tokens);
 }
 
@@ -369,6 +382,25 @@ function updatePlaybackStatus() {
   elements.actionLabel.textContent = engine.playing ? '소리 멈추기' : '문장을 연주하기';
   elements.engineLabel.textContent = engine.playing ? 'sound awake' : 'sound asleep';
   document.querySelector('#code-state').textContent = engine.playing ? '연주 중' : '대기';
+  updateStanzaIndicator();
+}
+
+function updateStanzaIndicator() {
+  const active = engine.playing && engine.score?.text === elements.sentence.value;
+  const score = active ? engine.score : stanzaScore;
+  const count = score.sections.length;
+  const position = stanzaPosition(engine.repl?.scheduler.now() ?? 0, count);
+  const key = `${active}:${count}:${position.index}:${position.bar}`;
+  if (key === stanzaIndicatorKey) return;
+  stanzaIndicatorKey = key;
+  const label = document.querySelector('#stanza-status');
+  label.hidden = count < 2;
+  label.textContent = active ? `${position.index + 1}연 / ${count} · ${position.bar}/4 마디` : `${count}개의 연 · 각각 4마디씩 반복`;
+  const section = active && count > 1 ? score.sections[position.index] : null;
+  for (const word of elements.sentenceHighlight.querySelectorAll('.word-token')) {
+    const start = Number(word.dataset.start);
+    word.classList.toggle('is-playing-stanza', !!section && start >= section.start && start < section.end);
+  }
 }
 
 function stopPlayback(message = '연주를 멈췄어요. 문장을 바꾸거나 다시 시작해보세요.') {
@@ -392,7 +424,7 @@ async function applyLatestAudio() {
       appliedCode = code;
       const semantic = appliedCode === semanticTransitionCode;
       try {
-        await engine.play(appliedCode, { semantic });
+        await engine.play(appliedCode, { semantic, score:stanzaScore });
       } catch (error) {
         if (!semantic || !engine.playing) throw error;
         // Keep the existing transport alive if an optional AI update fails.
@@ -583,7 +615,9 @@ elements.copyCode.addEventListener('click', async () => {
 });
 
 window.addEventListener('formyiru:cycle', (event) => {
-  elements.cycleValue.textContent = event.detail.toFixed(2).padStart(5, '0');
+  const cycle = engine.playing ? engine.repl.scheduler.now() : 0;
+  elements.cycleValue.textContent = Math.max(0, cycle % 1).toFixed(2).padStart(5, '0');
+  updateStanzaIndicator();
 });
 
 let editorWidth = 0;

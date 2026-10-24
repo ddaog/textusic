@@ -10,6 +10,13 @@ export function codeLayers(source) {
   });
 }
 export function visiblePatternCode(source) {
+  if (source.includes('// STANZA ')) {
+    const sections = source.split(/(?=\/\/ STANZA )/u).slice(1);
+    return ['arrange(', ...sections.flatMap((section, index) => {
+      const title = section.split('\n')[0];
+      return [`  ${title}`, '  [4,', ...visiblePatternCode(section.slice(title.length)).map(line => `    ${line}`), `  ]${index < sections.length - 1 ? ',' : ''}`];
+    }), ')'];
+  }
   const patterns = source.split('\n').filter((line) => /^\s+(?:n|note|s)\(/u.test(line))
     .map((line) => {
       const pattern = line.match(/^\s*((?:n|note|s)\("[^"\n]*"\))/u)?.[1];
@@ -24,7 +31,8 @@ export function renderLiveCode(host, source) {
   const lines = visiblePatternCode(source);
   host.closest('.live-code-panel')?.style.setProperty('--pattern-rows', lines.length);
   const count = document.querySelector('#layer-count');
-  if (count) count.textContent = `${layers.length} LAYERS`;
+  const sections = (source.match(/\/\/ STANZA /g) ?? []).length;
+  if (count) count.textContent = sections ? `${sections} STANZAS · 4 BARS EACH` : `${layers.length} LAYERS`;
   const fragment = document.createDocumentFragment();
   lines.forEach((line, index) => {
     const row = document.createElement('span');

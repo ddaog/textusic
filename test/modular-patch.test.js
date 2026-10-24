@@ -31,7 +31,8 @@ test('gate and pitch inputs take their source sequence and retain gain headroom'
   patch.modules[0].pitch = Array(8).fill(6);
   patch.cables = [{source:0,target:1,kind:'gate'}, {source:0,target:1,kind:'pitch'}];
   const voices = compileModularVoices(patch, {chords:[0],root:'C',scale:'major'});
-  assert.match(voices[1], /n\("<\[6 ~ ~ ~ ~ ~ ~ ~\]>"\)/u);
+  assert.match(voices[1], /\[6@3 ~\]/u);
+  assert.equal(voices[1].match(/n\("([^"]+)"\)/u)[1], voices[0].match(/n\("([^"]+)"\)/u)[1]);
   assert.match(voices[1], /gain\(0.081\)/u);
 });
 test('visible patch instructions correspond to compiled modulation, hiding parameters', () => {

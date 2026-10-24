@@ -2,9 +2,9 @@
 // words add subdivisions without replacing the foundational hits.
 export function createRhythm(analysis, richness, tension = 0) {
   const seed = analysis.seed >>> 0;
-  const family = seed % 4;
-  const kicks = [[0, 8], [0, 6, 10], [0, 4, 8, 12], [0, 7, 10]][family];
-  const snares = family === 3 ? [8] : [4, 12];
+  const family = seed % 8;
+  const kicks = [[0,8], [0,6,10], [0,4,8,12], [0,7,10], [0,3,8,11], [0,10], [0,6,8,14], [0,5,11]][family];
+  const snares = [3,5].includes(family) ? [8] : family === 7 ? [6,12] : [4,12];
   const hash = (bar, step, voice) => {
     let value = (seed ^ Math.imul(bar + 1, 374761393) ^ Math.imul(step + 1, 668265263) ^ voice) >>> 0;
     value = Math.imul(value ^ (value >>> 13), 1274126177) >>> 0;
@@ -17,7 +17,8 @@ export function createRhythm(analysis, richness, tension = 0) {
     for (let step = 0; step < 16; step++) {
       kick.push(kicks.includes(step) || (step % 2 === 0 && hash(bar, step, 1) < richness * .15) ? 'c1' : '~');
       snare.push(snares.includes(step) || (fill && step > 12 && hash(bar, step, 2) < richness * .65 + tension * .15) ? 'white' : '~');
-      const hit = step % 4 === 2 || (step % 2 === 0 && hash(bar, step, 3) < richness * .8)
+      const hatAnchor = [2,2,0,2,1,2,0,3][family];
+      const hit = step % 4 === hatAnchor || (step % 2 === 0 && hash(bar, step, 3) < richness * .8)
         || (step % 2 === 1 && hash(bar, step, 4) < richness * (.12 + tension * .18));
       hat.push(hit ? 'white' : '~');
       accents.push((step % 4 === 2 ? .85 : .35 + hash(bar, step, 5) * .3).toFixed(2));

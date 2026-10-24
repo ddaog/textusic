@@ -180,6 +180,7 @@ export class Visualizer {
 
   getCycle(now) {
     if (!this.playing) return 0;
+    if (this.playbackCycle) return this.playbackCycle();
     const secondsPerCycle = 240 / this.analysis.bpm;
     return ((now - this.startedAt) / 1000 / secondsPerCycle) % 1;
   }
