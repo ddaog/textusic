@@ -354,6 +354,8 @@ function renderRelations(wordNodes) {
       path.setAttribute('d', `M ${x1} ${y1} C ${bend} ${y1}, ${bend} ${y2}, ${x2} ${y2}`);
     }
     path.setAttribute('class', 'relation-path');
+    path.dataset.fromStart = wordNodes[from].dataset.start;
+    path.dataset.toStart = wordNodes[to].dataset.start;
     if (type === 'patch') {
       path.classList.add('is-patch');
       path.dataset.signal = kind;
@@ -375,9 +377,12 @@ function renderRelations(wordNodes) {
       point.setAttribute('cy', y);
       point.setAttribute('r', '1.1');
       point.setAttribute('class', 'relation-point');
+      point.dataset.fromStart = (x === x1 && y === y1 ? wordNodes[from] : wordNodes[to]).dataset.start;
       svg.append(point);
     }
   }
+  stanzaIndicatorKey = '';
+  updateStanzaIndicator();
 }
 
 function analyzeCurrentText({ keepVariation = false, refreshSemantics = true, semanticUpdate = false } = {}) {
@@ -421,14 +426,19 @@ function updateStanzaIndicator() {
   stanzaIndicatorKey = key;
   const label = document.querySelector('#stanza-status');
   label.hidden = count < 2;
-  label.textContent = active ? `${position.index + 1}연 / ${count} · ${position.bar}/4 마디` : `${count}개의 연 · 각각 4마디씩 반복`;
+  label.textContent = active ? `지금 ${position.index + 1}연 / ${count} · ${position.bar}/4 마디` : `${count}개의 연 · 각각 4마디씩 반복`;
+  label.classList.toggle('is-active', active);
   const section = active && count > 1 ? score.sections[position.index] : null;
   const visualAnalysis = section?.analysis ?? analysis;
+  visualizer.transitionDuration = Math.min(1600, 120000 / score.bpm);
+  elements.relationLines.style.setProperty('--stanza-fade', `${visualizer.transitionDuration}ms`);
   if (visualizer.analysis !== visualAnalysis) visualizer.setAnalysis(visualAnalysis);
   visualizer.stanza = count > 1 ? { count, index: active ? position.index : -1 } : null;
   const visualLabel = document.querySelector('#visual-stanza');
   visualLabel.hidden = count < 2;
-  visualLabel.textContent = label.textContent;
+  const excerpt = section?.text.trim().split('\n')[0] ?? '';
+  visualLabel.textContent = active ? `지금 ${position.index + 1}연 / ${count}  ${'●'.repeat(position.bar)}${'○'.repeat(4-position.bar)}  ${excerpt}` : label.textContent;
+  visualLabel.classList.toggle('is-active', active);
   elements.visualTitle.textContent = visualAnalysis.concepts.slice(0, 3).map(item => item.label).join(' · ') || '—';
   for (const [axis, parts] of Object.entries(elements.dials)) {
     const value = metricNumber(visualAnalysis.axes[axis]);
@@ -438,6 +448,11 @@ function updateStanzaIndicator() {
   for (const word of elements.sentenceHighlight.querySelectorAll('.word-token')) {
     const start = Number(word.dataset.start);
     word.classList.toggle('is-playing-stanza', !!section && start >= section.start && start < section.end);
+  }
+  const inSection = start => !!section && start >= section.start && start < section.end;
+  for (const line of elements.relationLines.querySelectorAll('[data-from-start]')) {
+    const relevant = inSection(Number(line.dataset.fromStart)) || (line.dataset.toStart !== undefined && inSection(Number(line.dataset.toStart)));
+    line.classList.toggle('is-other-stanza', !!section && !relevant);
   }
 }
 

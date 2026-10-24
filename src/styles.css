@@ -1380,11 +1380,20 @@ footer { min-height:28px; }
   .live-code-panel .live-code-scroll { height:min(174px, calc(var(--pattern-rows, 1) * 18px + 12px)); }
   .compact-viewport .live-code-panel .live-code-scroll { height:66px; }
 }
-.stanza-status { grid-column:1/-1; margin:0; color:#758378; font:10px/1.6 var(--mono); letter-spacing:.04em; }
+.stanza-status { grid-column:1/-1; margin:0; color:#758378; font:12px/1.6 var(--mono); letter-spacing:.02em; }
+.stanza-status.is-active { color:#ac583b; }
 .composer .word-token.is-playing-stanza { background-color:#879d801a; border-radius:3px; box-shadow:0 2px 0 #879d8055; }
 .expand-editor { position:absolute; right:8px; top:5px; z-index:8; border:0; background:var(--paper, #e7e9e4); color:#69716e; border-radius:8px; min-width:44px; min-height:32px; cursor:pointer; }
 .composer #sentence, .composer #sentence-highlight { padding-top:40px; }
-.visual-stanza { margin:0; text-align:center; font:11px monospace; color:#7e8b82; letter-spacing:.08em; }
+.visual-stanza { margin:4px 0 8px; padding:8px 10px; border-left:2px solid #b7c0b6; border-radius:0 5px 5px 0; background:#eef0ec; text-align:left; font:12px/1.5 var(--sans); color:#7e8b82; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.visual-stanza.is-active { border-left-color:#e8663d; color:#8d4e38; background:#e8663d0c; }
+.relation-lines .relation-path { transition:stroke-opacity var(--stanza-fade, 1000ms) ease; }
+.relation-lines .relation-path.is-other-stanza { stroke-opacity:.18; }
+.relation-lines .relation-point { transition:fill-opacity var(--stanza-fade, 1000ms) ease; }
+.relation-lines .relation-point.is-other-stanza { fill-opacity:.18; }
+@media (prefers-reduced-motion: reduce) {
+  .relation-lines .relation-path, .relation-lines .relation-point { transition:none; }
+}
 .editor-expanded { overflow:hidden; }
 .editor-expanded .composer .text-field-wrap { position:fixed; inset:12px; bottom:auto; height:calc(var(--visible-height, 100dvh) - 24px); z-index:100; background:#e1e4df; box-shadow:0 0 0 100vmax #e7e9e4; }
 .editor-expanded .composer #sentence { min-height:calc(var(--visible-height, 100dvh) - 26px); max-height:calc(var(--visible-height, 100dvh) - 26px); }

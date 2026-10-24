@@ -148,6 +148,9 @@ export class Visualizer {
   }
 
   setAnalysis(analysis) {
+    this.previousVisual = this.playing && !this.reducedMotion && this.analysis !== analysis
+      ? { words:this.analysis.tokenMeanings.slice(0,12), stanza:this.stanza ? {...this.stanza} : null, started:performance.now() }
+      : null;
     this.analysis = analysis;
     const random = seeded(analysis.seed);
     this.profiles = analysis.concepts.slice(0, 3).map((item) => visualProfileFor(item.id));
@@ -175,6 +178,7 @@ export class Visualizer {
 
   setPlaying(playing) {
     this.playing = playing;
+    if (!playing) this.previousVisual = null;
     if (playing) this.startedAt = performance.now();
   }
 
@@ -249,12 +253,16 @@ export class Visualizer {
     ctx.moveTo(centerX + baseRadius * 0.62, centerY);
     ctx.arc(centerX, centerY, baseRadius * 0.62, 0, TAU);
     ctx.stroke();
+    const progress = this.previousVisual ? clamp((time - this.previousVisual.started) / (this.transitionDuration ?? 1000)) : 1;
+    const blend = progress * progress * (3 - 2 * progress);
     if (this.stanza) {
       const { count, index: activeIndex } = this.stanza;
       for (let index = 0; index < count; index++) {
         const start = -Math.PI / 2 + index * TAU / count;
-        ctx.strokeStyle = index === activeIndex ? 'rgba(232, 102, 61, .8)' : COLORS.grid;
-        ctx.lineWidth = index === activeIndex ? 3 : 1;
+        const oldIndex = this.previousVisual?.stanza?.index;
+        const emphasis = (index === activeIndex ? blend : 0) + (index === oldIndex ? 1 - blend : 0);
+        ctx.strokeStyle = emphasis > 0 ? `rgba(232, 102, 61, ${.17 + .63 * emphasis})` : COLORS.grid;
+        ctx.lineWidth = 1 + emphasis * 2;
         ctx.beginPath();
         ctx.arc(centerX, centerY, baseRadius + 5, start + .025, start + TAU / count - .025);
         ctx.stroke();
@@ -265,8 +273,8 @@ export class Visualizer {
     ctx.beginPath();
     ctx.arc(centerX, centerY, baseRadius, -Math.PI / 2, -Math.PI / 2 + cycle * TAU);
     ctx.stroke();
-    const words = analysis.tokenMeanings.slice(0, 12);
     const levels = this.spectrum?.read(time);
+    const drawWords = (words, opacity) => {
     words.forEach((meaning, index) => {
       const angle = -Math.PI / 2 + (index / Math.max(1, words.length)) * TAU;
       const radius = meaning.layer === 'far' ? baseRadius * .8 : baseRadius * .5;
@@ -274,12 +282,16 @@ export class Visualizer {
       // A visual association with an output band, not isolated word/voice metering.
       const band = (meaning.layer === 'far' ? 0 : 4) + Math.round(clamp(meaning.traits?.light ?? .5) * 5);
       const energy = this.playing ? (levels?.[band] ?? 0) : 0;
-      ctx.globalAlpha = .15 + .85 * energy;
+      ctx.globalAlpha = opacity * (.15 + .85 * energy);
       ctx.fillStyle = profile.color;
       ctx.beginPath();
       ctx.arc(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius, meaning.layer === 'far' ? 2.6 : 3.4, 0, TAU);
       ctx.fill();
     });
+    };
+    if (this.previousVisual && progress < 1) drawWords(this.previousVisual.words, 1 - blend);
+    drawWords(analysis.tokenMeanings.slice(0, 12), blend);
+    if (progress >= 1) this.previousVisual = null;
     ctx.globalAlpha = this.playing ? .2 + .8 * Math.max(0, ...(levels ?? [])) : .2;
     ctx.fillStyle = '#e8663d';
     ctx.beginPath();
