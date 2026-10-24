@@ -52,6 +52,7 @@ export function drawVideoFrame(canvas, source, { text = '', scene, active, energ
     drawVideoWords(ctx, layout.parts, size, scene.edges, energy);
   } else layout.parts.forEach(part => {
     ctx.globalAlpha = part.alpha;
+    ctx.fillStyle = part.active === false ? '#7b827e' : '#424b48';
     ctx.fillText(part.text, part.x, part.y);
   });
   ctx.globalAlpha = 1;

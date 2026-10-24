@@ -31,7 +31,8 @@ test('all stanzas stay visible and emphasis crossfades instead of jumping', () =
   updateVideoEmphasis(parts, { start: 0, end: 2 }, 0);
   assert.deepEqual(parts.map(p => p.alpha), [1, .38]);
   updateVideoEmphasis(parts, { start: 4, end: 6 }, 67);
-  assert.ok(parts.every(p => p.alpha > .38 && p.alpha < 1));
+  assert.equal(parts[0].alpha, .38);
+  assert.ok(parts[1].alpha > .38 && parts[1].alpha < 1);
   for (let i = 0; i < 20; i++) updateVideoEmphasis(parts, { start: 4, end: 6 }, 67);
   assert.ok(parts[1].alpha > .99);
   updateVideoEmphasis(parts, null, 67, true);
@@ -81,4 +82,22 @@ test('editing a playing poem retains one visible active stanza including fallbac
 
 test('missing relation endpoints are safe when text is edited', () => {
   drawVideoWords(context(), [], 20, [{ fromStart: 0, toStart: 90, dash: [] }]);
+});
+
+test('inactive text is identical neutral ink for every effect and repeated word', () => {
+  for (const effect of ['spark','ray','prism','ember','jitter','wave','ripple','wind','rain','grid','leaf','bloom']) {
+    const ctx=context();
+    const words=[0,4].map(start=>({start,end:start+2,color:'#000000',accent:'#ff0000',effect,embedding:true}));
+    const parts=layoutVideoWords(ctx,'빛빛\n\n빛빛',['빛빛','','빛빛'],30,words);
+    updateVideoEmphasis(parts,{start:0,end:2},0);
+    drawVideoWords(ctx,parts,30,[],1);
+    const rendered=ctx.calls.filter(c=>c.text);
+    assert.equal(rendered[1].color,'#7b827e',effect);
+    assert.equal(rendered[1].alpha,.38,effect);
+    assert.equal(rendered[1].blur,0,effect);
+    // Advance to the next stanza even with a zero-time frame: old ink must dim.
+    updateVideoEmphasis(parts,{start:4,end:6},0);
+    assert.equal(parts[0].alpha,.38);
+    assert.equal(parts[0].active,false);
+  }
 });

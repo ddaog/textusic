@@ -29,14 +29,18 @@ export function layoutVideoWords(ctx, text, lines, size, words) {
 export function updateVideoEmphasis(parts, active, elapsed, reducedMotion = false) {
   const blend = reducedMotion ? 1 : 1 - Math.exp(-Math.min(200, Math.max(0, elapsed)) / 260);
   for (const part of parts) {
-    const target = !active || (part.start < active.end && part.end > active.start) ? 1 : 0.38;
+    part.active = !active || (part.start < active.end && part.end > active.start);
+    const target = part.active ? 1 : 0.38;
     part.alpha = part.alpha === null ? target : part.alpha + (target - part.alpha) * blend;
+    // Only the incoming stanza fades in. Never leave the outgoing stanza bright,
+    // even for a stalled frame or when an edit rebuilt the cached layout.
+    if (!part.active) part.alpha = 0.38;
   }
 }
 
 export function drawVideoWords(ctx, parts, size, edges, energy = 0) {
   const centers = new Map();
-  for (const p of parts) if (p.word && !centers.has(p.word.start)) centers.set(p.word.start, { x: p.x + p.width / 2, y: p.y - size * .35, alpha: p.alpha });
+  for (const p of parts) if (p.word && !centers.has(p.word.start)) centers.set(p.word.start, { x: p.x + p.width / 2, y: p.y - size * .35, alpha: p.alpha, active: p.active });
   ctx.save();
   for (const edge of edges) {
     const a = centers.get(edge.fromStart), b = centers.get(edge.toStart);
@@ -61,6 +65,15 @@ export function drawVideoWords(ctx, parts, size, edges, energy = 0) {
   for (const part of parts) {
     const { word, x, y, width } = part;
     ctx.globalAlpha = part.alpha;
+    if (part.active === false) {
+      // One neutral ink for ALL inactive words, punctuation and effects. Drawing
+      // these plainly prevents overlapping glows/underlines increasing contrast.
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = '#7b827e';
+      ctx.fillText(part.text, x, y);
+      continue;
+    }
     const color = word?.color || '#424b48', accent = word?.accent || color;
     ctx.fillStyle = color; ctx.shadowBlur = 0;
     if (word && ['leaf', 'bloom'].includes(word.effect)) {
@@ -89,7 +102,8 @@ export function drawVideoWords(ctx, parts, size, edges, energy = 0) {
   ctx.fillStyle = '#df805d';
   for (const [start, p] of centers) {
     if (!edges.some(e => e.fromStart === start || e.toStart === start)) continue;
-    ctx.globalAlpha = (.24 + .76 * energy) * p.alpha;
+    ctx.fillStyle = p.active === false ? '#7b827e' : '#df805d';
+    ctx.globalAlpha = p.active === false ? .14 : (.24 + .76 * energy) * p.alpha;
     ctx.beginPath(); ctx.arc(p.x, p.y, 1.1, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
