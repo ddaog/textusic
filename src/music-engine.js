@@ -1,4 +1,5 @@
 import { createRhythm } from './rhythm.js';
+import { ambientHarmony } from './ambient-harmony.js';
 import { phraseMelody } from './melody-rhythm.js';
 import { wordOrderSyncopation } from './word-order-rhythm.js';
 import { configurePlaybackSession } from './audio-session.js';
@@ -69,11 +70,13 @@ export function createStrudelCode(analysis, beat = {}, { foundation } = {}) {
   const room = ((0.24 + analysis.axes.space * 0.28) * (1 - tension * .55)).toFixed(2);
   const attack = ((0.025 + analysis.axes.softness * 0.09) * (1 - tension * .8)).toFixed(3);
   const gain = (value) => value.toFixed(3);
-  const chordPattern = '<' + chords.map((root) => '[' + [root, root + 2, root + 4, root + 6].join(',') + ']').join(' ') + '>';
+  const ambient = ambientHarmony(chords, (foundation ?? analysis).seed, tension);
+  const chordPattern = '<' + ambient.voicings.map(notes => '[' + notes.join(',') + ']').join(' ') + '>';
+  const padCutoff = `sine.slow(${ambient.breath}).range(${Math.round(550 + analysis.axes.light * 350)},${Math.round(1000 + analysis.axes.light * 850)})`;
   const bass = alternate(chords.map((root) => root + ' ~ ~ ~ ' + root + ' ~ ' + (richness > 0.65 ? root + 4 : '~') + ' ~'));
   const parts = [
     'n("' + alternate(phrasedMelody) + '").scale("' + scale + '").s("' + (tension ? 'sawtooth' : 'triangle') + '").lpf(' + Math.round(cutoff + tension * 900) + ').attack(' + attack + ').decay(.22).sustain(.12).release(' + (tension ? '.14' : '.35') + ').room(' + room + ').delay(.12).delaytime(.375).delayfeedback(.22).gain(' + gain(arrangement.melodyGain * (1 - tension * .3)) + ')',
-    'n("' + chordPattern + '").scale("' + padScale + '").s("triangle").lpf(950).attack(.5).decay(.4).sustain(.28).release(.65).room(' + room + ').gain(' + gain(arrangement.padGain) + ')',
+    'n("' + chordPattern + '").scale("' + padScale + '").s("triangle").hpf(180).lpf(' + padCutoff + ').attack(.65).decay(.5).sustain(.45).release(.8).room(' + room + ').pan(sine.slow(' + (ambient.breath * 2) + ').range(.38,.62)).gain(' + gain(arrangement.padGain * .8) + ')',
     'n("' + bass + '").scale("' + bassScale + '").s("sine").lpf(430).attack(.015).decay(.24).sustain(.1).release(.12).gain(' + gain(arrangement.bassGain) + ')',
     'n("' + alternate(chords.map((root) => '~ ~ ' + (root + 11) + ' ~ ~ ~ ' + (root + 9) + ' ~')) + '").scale("' + scale + '").s("sine").attack(.01).decay(.1).sustain(0).release(.18).room(.4).gain(' + gain(arrangement.sparkleGain) + ')',
   ];

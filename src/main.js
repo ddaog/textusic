@@ -20,7 +20,7 @@ import { quietConnections, MUSIC_TIPS, nextTipIndex } from './ui-guidance.js';
 let tipIndex = -1;
 function showNextTip() {
   tipIndex = nextTipIndex(tipIndex);
-  document.querySelector('#tip-topic').textContent = `TIP · ${MUSIC_TIPS[tipIndex].topic}`;
+  document.querySelector('#tip-topic').textContent = MUSIC_TIPS[tipIndex].topic;
   document.querySelector('#tip-text').textContent = MUSIC_TIPS[tipIndex].text;
 }
 document.querySelector('#next-tip').addEventListener('click', showNextTip);
