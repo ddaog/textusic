@@ -660,7 +660,7 @@ videoButton.addEventListener('click', async () => {
         const score = engine.score;
         const sections = score?.sections ?? [];
         const position = stanzaPosition(engine.repl?.scheduler.now() ?? 0, sections.length || 1);
-        return { text: sections[position.index]?.text ?? score?.text ?? elements.sentence.value,
+        return { text: elements.sentence.value,
           label: `지금 ${position.index + 1}연 / ${sections.length || 1} · ${position.bar}/4 마디` };
       });
     document.querySelector('#video-result').hidden = true;

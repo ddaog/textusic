@@ -13,20 +13,38 @@ export function wrapPoem(ctx, text, width) {
   return lines;
 }
 
+export function fitVideoPoem(ctx, text, width = 468, height = 290) {
+  let low = 0.25, high = 30;
+  // Keep every line (including blank stanza separators); never crop or ellipsize.
+  for (let step = 0; step < 8; step++) {
+    const size = (low + high) / 2;
+    ctx.font = `${size}px serif`;
+    if (wrapPoem(ctx, text, width).length * size * 1.45 <= height) low = size;
+    else high = size;
+  }
+  const size = Math.floor(low * 4) / 4;
+  ctx.font = `${size}px serif`;
+  return { size, lines: wrapPoem(ctx, text, width) };
+}
+
+const poemLayouts = new WeakMap();
+
 // One bounded-size canvas; copy the existing visualization, never run another synth/FFT.
 export function drawVideoFrame(canvas, source, { text = '', label = '' } = {}) {
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#e6e8e3'; ctx.fillRect(0, 0, 540, 960);
   ctx.fillStyle = '#737e78'; ctx.font = '14px sans-serif';
   ctx.fillText('시인을 위한 앰비언트 음악', 36, 45);
-  let lines;
-  let size = 30;
-  do { ctx.font = `${size}px serif`; lines = wrapPoem(ctx, text, 468); if (lines.length * size * 1.45 <= 290 || size === 16) break; size -= 2; } while (size >= 16);
-  const count = Math.floor(290 / (size * 1.45));
+  let layout = poemLayouts.get(canvas);
+  if (layout?.text !== text) {
+    layout = { text, ...fitVideoPoem(ctx, text) };
+    poemLayouts.set(canvas, layout);
+  }
+  const { lines, size } = layout;
+  ctx.font = `${size}px serif`;
   ctx.fillStyle = '#424b48';
-  lines.slice(0, count).forEach((line, index) => {
-    if (index === count - 1 && lines.length > count) line = line.slice(0, -2) + '…';
-    ctx.fillText(line, 36, 100 + index * size * 1.45);
+  lines.forEach((line, index) => {
+    ctx.fillText(line, 36, 76 + size + index * size * 1.45);
   });
   ctx.fillStyle = '#cc7454'; ctx.font = '14px sans-serif'; ctx.fillText(label, 36, 420);
   if (source.width && source.height) {

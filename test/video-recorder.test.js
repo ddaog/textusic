@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { VideoRecorder, wrapPoem } from '../src/video-recorder.js';
+import { VideoRecorder, wrapPoem, fitVideoPoem, drawVideoFrame } from '../src/video-recorder.js';
 
 function fixture() {
   const tracks = [];
@@ -61,4 +61,28 @@ test('unsupported recorder fails before allocating capture resources', () => {
 });
 test('poem wrapping preserves line breaks and Korean characters', () => {
   assert.deepEqual(wrapPoem({ measureText: s => ({ width: [...s].length }) }, '가나다\n라', 2), ['가나', '다', '라']);
+});
+
+test('all 180 characters fit without truncation, including many explicit line breaks', () => {
+  const ctx = { font: '', measureText(text) { return { width: [...text].length * parseFloat(this.font) }; } };
+  for (const text of ['가'.repeat(180), '바람과 빛\n\n'.repeat(22).slice(0, 180), '가\n'.repeat(90)]) {
+    const { size, lines } = fitVideoPoem(ctx, text);
+    assert.equal(lines.join(''), text.replaceAll('\n', ''));
+    assert.ok(lines.length * size * 1.45 <= 290);
+    assert.ok(lines.every(line => ctx.measureText(line).width <= 468));
+  }
+});
+
+test('video draws every line and caches text layout between frames', () => {
+  let measurements = 0;
+  const drawn = [];
+  const ctx = { font: '', fillRect() {}, fillText(t) { drawn.push(t); },
+    measureText(t) { measurements++; return { width: t.length * parseFloat(this.font) }; } };
+  const canvas = { getContext: () => ctx };
+  const text = '봄\n'.repeat(60);
+  drawVideoFrame(canvas, {}, { text });
+  assert.equal(drawn.filter(t => t === '봄').length, 60);
+  const firstCount = measurements;
+  drawVideoFrame(canvas, {}, { text });
+  assert.equal(measurements, firstCount);
 });
