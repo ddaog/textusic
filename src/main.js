@@ -69,6 +69,7 @@ let draftStorage;
 try { draftStorage = window.sessionStorage; } catch { /* Storage can be denied. */ }
 elements.sentence.value = readDraft(draftStorage);
 const engine = new MusicEngine();
+let videoScene;
 let recordingUrl;
 const recording = new MusicRecorder((blob, extension) => {
   if (recordingUrl) URL.revokeObjectURL(recordingUrl);
@@ -357,12 +358,28 @@ function renderRelations(wordNodes) {
   const rect = svg.getBoundingClientRect();
   svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
   svg.replaceChildren();
-  if (wordNodes.length < 2) return;
   const patch = createModularPatch(analysis);
   const sources = [...analysis.syntax.edges.filter((edge) => analysis.syntax.words[edge.from]?.sentence === analysis.syntax.words[edge.to]?.sentence),
     ...patch.cables.map((cable) => ({ ...cable, type:'patch', provisional:cable.normalled }))];
+  const connections = quietConnections(sources, wordNodes.length, window.innerWidth <= 600);
+  videoScene = {
+    text: elements.sentence.value,
+    fontFamily: getComputedStyle(elements.sentenceHighlight).fontFamily,
+    words: wordNodes.map(word => {
+      const style = getComputedStyle(word);
+      return { start: Number(word.dataset.start), end: Number(word.dataset.start) + word.textContent.length,
+        color: style.color, accent: style.getPropertyValue('--word-accent').trim(), effect: word.dataset.effect,
+        embedding: word.dataset.meaningSource === 'embedding' };
+    }),
+    edges: connections.filter(e => wordNodes[e.from] && wordNodes[e.to]).map(e => ({
+      fromStart: Number(wordNodes[e.from].dataset.start), toStart: Number(wordNodes[e.to].dataset.start), type: e.type,
+      color: e.type === 'patch' ? ({ gate: '#b78a61', pitch: '#8683a9' }[e.kind] || '#789b8b')
+        : ({ semantic: '#779b85', repetition: '#78928a', 'shared-subject': '#84948d' }[e.type] || 'rgba(65,69,71,.45)'),
+      dash: e.provisional ? [2, 5] : e.type === 'semantic' ? [1, 5] : e.kind === 'gate' ? [3, 4] : [],
+    })),
+  };
   const points = new Set();
-  for (const { from, to, provisional, type, kind, source, target } of quietConnections(sources, wordNodes.length, window.innerWidth <= 600)) {
+  for (const { from, to, provisional, type, kind, source, target } of connections) {
     if (!wordNodes[from]?.isConnected || !wordNodes[to]?.isConnected) continue;
     const a = wordNodes[from].getClientRects()[0] ?? wordNodes[from].getBoundingClientRect();
     const b = wordNodes[to].getClientRects()[0] ?? wordNodes[to].getBoundingClientRect();
@@ -661,7 +678,10 @@ videoButton.addEventListener('click', async () => {
         const sections = score?.sections ?? [];
         const position = stanzaPosition(engine.repl?.scheduler.now() ?? 0, sections.length || 1);
         return { text: elements.sentence.value,
-          label: `지금 ${position.index + 1}연 / ${sections.length || 1} · ${position.bar}/4 마디` };
+          scene: videoScene?.text === elements.sentence.value ? videoScene : undefined,
+          active: score?.text === elements.sentence.value && sections.length > 1 ? sections[position.index] : null,
+          energy: Math.pow(Math.max(0, ...spectrum.levels), 1.5),
+          reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches };
       });
     document.querySelector('#video-result').hidden = true;
   } catch (error) { updateVideoStatus(error.message); }

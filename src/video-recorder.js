@@ -1,5 +1,7 @@
 export const VIDEO_TYPES = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm'];
 
+import { layoutVideoWords, updateVideoEmphasis, drawVideoWords } from './video-poem.js';
+
 export function wrapPoem(ctx, text, width) {
   const lines = [];
   for (const paragraph of text.split('\n')) {
@@ -13,40 +15,44 @@ export function wrapPoem(ctx, text, width) {
   return lines;
 }
 
-export function fitVideoPoem(ctx, text, width = 468, height = 290) {
+export function fitVideoPoem(ctx, text, width = 468, height = 290, fontFamily = 'serif') {
   let low = 0.25, high = 30;
   // Keep every line (including blank stanza separators); never crop or ellipsize.
   for (let step = 0; step < 8; step++) {
     const size = (low + high) / 2;
-    ctx.font = `${size}px serif`;
+    ctx.font = `${size}px ${fontFamily}`;
     if (wrapPoem(ctx, text, width).length * size * 1.45 <= height) low = size;
     else high = size;
   }
   const size = Math.floor(low * 4) / 4;
-  ctx.font = `${size}px serif`;
+  ctx.font = `${size}px ${fontFamily}`;
   return { size, lines: wrapPoem(ctx, text, width) };
 }
 
 const poemLayouts = new WeakMap();
 
 // One bounded-size canvas; copy the existing visualization, never run another synth/FFT.
-export function drawVideoFrame(canvas, source, { text = '', label = '' } = {}) {
+export function drawVideoFrame(canvas, source, { text = '', scene, active, energy = 0, reducedMotion = false, now = performance.now() } = {}) {
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#e6e8e3'; ctx.fillRect(0, 0, 540, 960);
   ctx.fillStyle = '#737e78'; ctx.font = '14px sans-serif';
   ctx.fillText('시인을 위한 앰비언트 음악', 36, 45);
   let layout = poemLayouts.get(canvas);
-  if (layout?.text !== text) {
-    layout = { text, ...fitVideoPoem(ctx, text) };
+  if (layout?.text !== text || layout?.scene !== scene) {
+    layout = { text, scene, ...fitVideoPoem(ctx, text, 468, 290, scene?.fontFamily) };
+    if (scene) layout.parts = layoutVideoWords(ctx, text, layout.lines, layout.size, scene.words);
     poemLayouts.set(canvas, layout);
   }
   const { lines, size } = layout;
-  ctx.font = `${size}px serif`;
+  ctx.font = `${size}px ${scene?.fontFamily || 'serif'}`;
   ctx.fillStyle = '#424b48';
-  lines.forEach((line, index) => {
+  if (scene) {
+    updateVideoEmphasis(layout.parts, active, now - (layout.now ?? now), reducedMotion);
+    layout.now = now;
+    drawVideoWords(ctx, layout.parts, size, scene.edges, energy);
+  } else lines.forEach((line, index) => {
     ctx.fillText(line, 36, 76 + size + index * size * 1.45);
   });
-  ctx.fillStyle = '#cc7454'; ctx.font = '14px sans-serif'; ctx.fillText(label, 36, 420);
   if (source.width && source.height) {
     const scale = Math.min(500 / source.width, 460 / source.height);
     const w = source.width * scale, h = source.height * scale;
