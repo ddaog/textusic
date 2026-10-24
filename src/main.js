@@ -15,6 +15,16 @@ import { analyzeText, describeAnalysis } from './text-analyzer.js';
 import { LEXICON_STATS } from './lexicon.js';
 import { createArrangement, createStrudelCode, MusicEngine } from './music-engine.js';
 import { Visualizer, visualProfileFor, visualProfileForToken } from './visualizer.js';
+import { quietConnections, MUSIC_TIPS, nextTipIndex } from './ui-guidance.js';
+
+let tipIndex = -1;
+function showNextTip() {
+  tipIndex = nextTipIndex(tipIndex);
+  document.querySelector('#tip-topic').textContent = `TIP · ${MUSIC_TIPS[tipIndex].topic}`;
+  document.querySelector('#tip-text').textContent = MUSIC_TIPS[tipIndex].text;
+}
+document.querySelector('#next-tip').addEventListener('click', showNextTip);
+showNextTip();
 
 const elements = {
   sentence: document.querySelector('#sentence'),
@@ -318,7 +328,8 @@ function renderRelations(wordNodes) {
   const patch = createModularPatch(analysis);
   const sources = [...analysis.syntax.edges.filter((edge) => analysis.syntax.words[edge.from]?.sentence === analysis.syntax.words[edge.to]?.sentence),
     ...patch.cables.map((cable) => ({ ...cable, type:'patch', provisional:cable.normalled }))];
-  for (const { from, to, provisional, type, kind, source, target } of sources) {
+  const points = new Set();
+  for (const { from, to, provisional, type, kind, source, target } of quietConnections(sources, wordNodes.length, window.innerWidth <= 600)) {
     if (!wordNodes[from]?.isConnected || !wordNodes[to]?.isConnected) continue;
     const a = wordNodes[from].getClientRects()[0] ?? wordNodes[from].getBoundingClientRect();
     const b = wordNodes[to].getClientRects()[0] ?? wordNodes[to].getBoundingClientRect();
@@ -326,6 +337,7 @@ function renderRelations(wordNodes) {
     const x2 = b.left + b.width / 2 - rect.left;
     const y1 = a.top + a.height / 2 - rect.top;
     const y2 = b.top + b.height / 2 - rect.top;
+    if ([y1, y2].some(y => y < 0 || y > rect.height)) continue;
     const distance = Math.abs(x2 - x1);
     const lift = Math.max(8, Math.min(y1, y2) - Math.min(18, 7 + distance * .035));
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -348,10 +360,13 @@ function renderRelations(wordNodes) {
     if (provisional) path.classList.add('is-provisional');
     svg.append(path);
     for (const [x, y] of [[x1, y1], [x2, y2]]) {
+      const pointKey = `${x}:${y}`;
+      if (points.has(pointKey)) continue;
+      points.add(pointKey);
       const point = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       point.setAttribute('cx', x);
       point.setAttribute('cy', y);
-      point.setAttribute('r', '1.6');
+      point.setAttribute('r', '1.1');
       point.setAttribute('class', 'relation-point');
       svg.append(point);
     }
@@ -664,7 +679,7 @@ function setEditorExpanded(expanded) {
   expandEditor.setAttribute('aria-label', expanded ? '텍스트 크게 보기 닫기' : '텍스트 크게 보기');
   expandEditor.textContent = expanded ? '닫기 ↙' : '↗';
   // Hide the surrounding controls from keyboard and assistive navigation too.
-  document.querySelectorAll('.site-header, .live-code-panel, .visual-panel, .composer > :not(.text-field-wrap), footer').forEach(node => { node.inert = expanded; });
+  document.querySelectorAll('.site-header, .music-tip, .live-code-panel, .visual-panel, .composer > :not(.text-field-wrap), footer').forEach(node => { node.inert = expanded; });
   syncEditorLayout();
   scheduleRelations();
 }

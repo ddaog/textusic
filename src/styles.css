@@ -1384,3 +1384,22 @@ footer { min-height:28px; }
 .editor-expanded .composer #sentence { min-height:calc(var(--visible-height, 100dvh) - 26px); max-height:calc(var(--visible-height, 100dvh) - 26px); }
 .editor-expanded .composer #sentence, .editor-expanded .composer #sentence-highlight { padding:52px 24px 34px; }
 @media(prefers-reduced-motion:no-preference) { .word-token { transition:background-color .5s, box-shadow .5s; } }
+
+/* Keep the writing, rather than the cable mesh, in the foreground. */
+.relation-lines .relation-path { stroke-width:.65; opacity:.26; }
+.relation-lines .relation-path.is-patch { stroke-width:.85; opacity:.36; }
+.relation-lines .relation-path.is-provisional { opacity:.14; }
+.relation-lines .relation-point { fill:#7d8982; opacity:.45; }
+.music-tip { display:grid; grid-template-columns:auto minmax(0,1fr) 36px; align-items:start; gap:12px; max-width:1000px; margin:14px auto 12px; color:#707974; font-size:12px; line-height:1.65; }
+.tip-topic { padding-top:3px; font:10px/1.65 var(--mono); letter-spacing:.06em; white-space:nowrap; }
+.music-tip p { margin:0; min-height:3.3em; max-width:80ch; }
+.music-tip button { border:0; border-radius:50%; background:transparent; color:inherit; min-width:36px; min-height:36px; cursor:pointer; }
+.music-tip button:hover { background:#7d898212; }
+.music-tip button:focus-visible { outline:2px solid #7d8982; outline-offset:2px; }
+@media(max-width:600px) {
+  .music-tip { grid-template-columns:minmax(0,1fr) 36px; gap:3px 8px; margin:10px 0 16px; font-size:11px; }
+  .music-tip .tip-topic { grid-column:1; }
+  .music-tip p { grid-column:1; min-height:4.95em; }
+  .music-tip button { grid-column:2; grid-row:1 / 3; }
+}
+.compact-viewport .music-tip { display:none; }
