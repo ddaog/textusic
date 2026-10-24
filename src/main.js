@@ -2,7 +2,7 @@ import './styles.css';
 import './reading.css';
 import './code-layout.css';
 import { MusicRecorder } from './music-recorder.js';
-import { readDraft, saveDraft, deferAutomaticSemantics } from './session-safety.js';
+import { readDraft, saveDraft, semanticStartupDelay } from './session-safety.js';
 import { SemanticClient } from './semantic-client.js';
 import { addMeaningLinks } from './meaning-links.js';
 import { createModularPatch, patchDescriptions } from './modular-patch.js';
@@ -86,6 +86,7 @@ let audioRevision = 0;
 let autoPlayEnabled = true;
 let relationFrame;
 let composing = false;
+let lastInputAt = 0;
 let semanticState = { text: '', meanings: {}, similarities: [] };
 let semanticReady = false;
 let musicFoundation = null;
@@ -449,6 +450,7 @@ elements.sentence.addEventListener('focus', () => {
 });
 
 elements.sentence.addEventListener('input', (event) => {
+  lastInputAt = performance.now();
   saveDraft(draftStorage, elements.sentence.value);
   elements.charCount.textContent = elements.sentence.value.length;
   if (event.isComposing || composing) { renderWordHighlight(); return; }
@@ -617,6 +619,7 @@ window.addEventListener('pageshow', (event) => {
   autoPlayEnabled = true;
   updatePlaybackStatus();
   syncViewport();
+  scheduleSemanticStartup();
 });
 
 elements.charCount.textContent = elements.sentence.value.length;
@@ -625,21 +628,29 @@ renderAnalysis();
 if (elements.sentence.value) elements.status.textContent = '작성 중이던 문장을 복원했어요. 문장을 눌러 연주를 이어가세요.';
 
 // Leave the first paint free; inference and model preparation run in a worker.
-const semanticStartup = setTimeout(() => {
+let semanticStartup;
+function scheduleSemanticStartup(delay = semanticStartupDelay(navigator)) {
+  clearTimeout(semanticStartup);
+  semanticStartup = setTimeout(prepareSemantics, delay);
+}
+function prepareSemantics() {
+  if (semanticClient.enabled) return;
   let preference;
   try { preference = localStorage.getItem('textusic-semantic-auto'); } catch { /* Use default. */ }
   const connection = navigator.connection;
   if (preference === 'false') return;
-  if (deferAutomaticSemantics(navigator)) {
-    document.querySelector('#semantic-summary').textContent = 'AI 단어 해석 · 선택';
-    document.querySelector('#semantic-status').textContent = '안정적인 재생을 위해 AI 해석은 직접 켜주세요';
-    return;
-  }
   if (connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType)) {
     document.querySelector('#semantic-summary').textContent = 'AI 단어 해석 · 다운로드';
     document.querySelector('#semantic-status').textContent = '데이터 절약 중 · 직접 켜서 다운로드';
     return;
   }
+  // Give the first sound and active typing priority over the heavy worker.
+  // Hidden tabs wait until visible rather than downloading/inferencing unseen.
+  if (document.hidden || composing || audioTask || performance.now() - lastInputAt < 1200) {
+    scheduleSemanticStartup(1000);
+    return;
+  }
   semanticClient.preload();
   if (elements.sentence.value.trim() && !composing) semanticClient.request(elements.sentence.value, analysis.tokens);
-}, 1200);
+}
+scheduleSemanticStartup();

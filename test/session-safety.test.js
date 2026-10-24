@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readDraft, saveDraft, deferAutomaticSemantics } from '../src/session-safety.js';
+import { readDraft, saveDraft, semanticStartupDelay } from '../src/session-safety.js';
 
 test('draft survives reload and clearing input removes it', () => {
   const values = new Map();
@@ -15,10 +15,10 @@ test('draft survives reload and clearing input removes it', () => {
   assert.equal(readDraft(undefined), '');
 });
 
-test('mobile and constrained devices do not automatically load AI', () => {
+test('mobile and constrained devices automatically prepare AI after a longer first-play grace period', () => {
   for (const device of [{ userAgent:'iPhone Safari' }, { userAgent:'Android Chrome' }, { platform:'MacIntel', maxTouchPoints:5 }, { deviceMemory:4 }]) {
-    assert.equal(deferAutomaticSemantics(device), true);
+    assert.equal(semanticStartupDelay(device), 5000);
   }
-  assert.equal(deferAutomaticSemantics({ platform:'MacIntel', maxTouchPoints:0 }), false);
-  assert.equal(deferAutomaticSemantics({ deviceMemory:8 }), false);
+  assert.equal(semanticStartupDelay({ platform:'MacIntel', maxTouchPoints:0 }), 1200);
+  assert.equal(semanticStartupDelay({ deviceMemory:8 }), 1200);
 });

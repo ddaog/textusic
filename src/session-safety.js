@@ -11,8 +11,8 @@ export function saveDraft(storage, text) {
   } catch { /* Private browsing or full storage must never interrupt typing. */ }
 }
 
-export function deferAutomaticSemantics(device) {
+export function semanticStartupDelay(device) {
   const mobile = /iPhone|iPad|iPod|Android/i.test(device.userAgent ?? '')
     || (device.platform === 'MacIntel' && device.maxTouchPoints > 1);
-  return mobile || (device.deviceMemory > 0 && device.deviceMemory <= 4);
+  return mobile || (device.deviceMemory > 0 && device.deviceMemory <= 4) ? 5000 : 1200;
 }
