@@ -1,9 +1,13 @@
-import { pipeline, env } from '@huggingface/transformers';
+import { pipeline, env, mean_pooling } from '@huggingface/transformers';
+import { constrainedDevice, semanticSessionOptions, embedAndRelease } from './semantic-memory.js';
 import { CONCEPTS } from './lexicon.js';
 import { SEMANTIC_MODEL, SEMANTIC_REVISION, semanticNeighbors, emotionProjection, cosineSimilarity, meanVector, centerVector } from './semantic-math.js';
 
 env.allowLocalModels = false;
 env.backends.onnx.wasm.numThreads = 1;
+const constrained = constrainedDevice(navigator);
+const batchSize = constrained ? 1 : 4;
+const cacheLimit = constrained ? 128 : 512;
 const descriptions = [
   ['warmth', ['따뜻한 다정한 사랑', 'warm loving kind'], ['차가운 냉담한 외로움', 'cold distant lonely']],
   ['motion', ['빠르게 달리는 활발한 움직임', 'fast energetic movement'], ['느리게 멈춘 고요함', 'slow still motionless']],
@@ -16,13 +20,19 @@ let extractor, anchors, poles, centers, pending, running = false;
 const language = (text) => /[가-힣]/u.test(text) ? 'ko' : 'en';
 const cache = new Map(); // Word vectors stay in worker memory only, never localStorage.
 async function embed(texts) {
-  const output = await extractor(texts, { pooling: 'mean', normalize: true });
-  return output.tolist();
+  const vectors = [];
+  for (let offset = 0; offset < texts.length; offset += batchSize) {
+    vectors.push(...await embedAndRelease(extractor, texts.slice(offset, offset + batchSize), mean_pooling));
+    // Yield between small batches; do not monopolize a phone's CPU during audio.
+    if (constrained) await new Promise(resolve => setTimeout(resolve, 8));
+  }
+  return vectors;
 }
 async function initialize() {
   if (extractor) return;
   extractor = await pipeline('feature-extraction', SEMANTIC_MODEL, {
     revision: SEMANTIC_REVISION, dtype: 'q8', device: 'wasm',
+    session_options: semanticSessionOptions(constrained),
     progress_callback: (event) => {
       if (event.status === 'progress') self.postMessage({ type: 'status', status: 'loading', progress: Math.round(event.progress ?? 0) });
     },
@@ -71,7 +81,7 @@ async function processQueue() {
           const [raw] = await embed([token]);
           const vector = centerVector(raw, centers[language(token)]);
           meaning = { vector, matches: semanticNeighbors(vector, anchors), axes: emotionProjection(vector, poles) };
-          if (cache.size >= 512) cache.delete(cache.keys().next().value);
+          if (cache.size >= cacheLimit) cache.delete(cache.keys().next().value);
           cache.set(token, meaning);
         }
         result[token] = { matches: meaning.matches, axes: meaning.axes };
@@ -89,7 +99,10 @@ async function processQueue() {
     }
   } catch (error) {
     self.postMessage({ type: 'error', message: String(error?.message ?? error) });
+    try { await extractor?.dispose(); } catch { /* Worker termination is the final fallback. */ }
     extractor = null;
+    anchors = poles = centers = null;
+    cache.clear();
     pending = null;
   } finally { running = false; }
 }

@@ -3,7 +3,7 @@ import './reading.css';
 import './code-layout.css';
 import { MusicRecorder } from './music-recorder.js';
 import { createStanzaScore, stanzaPosition } from './stanzas.js';
-import { readDraft, saveDraft, semanticStartupDelay } from './session-safety.js';
+import { readDraft, saveDraft, semanticStartupDelay, interruptedSemanticPreparation, markSemanticPreparation } from './session-safety.js';
 import { SemanticClient } from './semantic-client.js';
 import { addMeaningLinks } from './meaning-links.js';
 import { createModularPatch, patchDescriptions } from './modular-patch.js';
@@ -103,6 +103,9 @@ function updateSemanticSummary() {
   document.querySelector('#semantic-summary').textContent = words || links
     ? `AI 해석 · ${words}단어 · ${links}연결` : 'AI 단어 해석 켜짐';
 }
+let preparationStorage;
+try { preparationStorage = window.sessionStorage; } catch { /* Private mode. */ }
+const interruptedPreparation = interruptedSemanticPreparation(preparationStorage);
 const semanticClient = new SemanticClient({
   onResult(text, result) {
     if (composing || text !== elements.sentence.value) return;
@@ -111,6 +114,7 @@ const semanticClient = new SemanticClient({
     if (autoPlayEnabled && engine.playing) applyLatestAudio();
   },
   onStatus(status, progress) {
+    markSemanticPreparation(preparationStorage, status === 'loading');
     const indicator = document.querySelector('#semantic-indicator');
     const justReady = status === 'ready' && !semanticReady;
     semanticReady = status === 'ready';
@@ -673,6 +677,7 @@ document.addEventListener('keydown', event => {
 });
 
 window.addEventListener('pagehide', () => {
+  markSemanticPreparation(preparationStorage, false);
   saveDraft(draftStorage, elements.sentence.value);
   clearTimeout(semanticStartup);
   stopPlayback();
@@ -705,6 +710,11 @@ function prepareSemantics() {
   try { preference = localStorage.getItem('textusic-semantic-auto'); } catch { /* Use default. */ }
   const connection = navigator.connection;
   if (preference === 'false') return;
+  if (interruptedPreparation) {
+    document.querySelector('#semantic-summary').textContent = 'AI 준비 재시도';
+    document.querySelector('#semantic-status').textContent = '이전 AI 준비가 중단되어 자동 재시도를 쉬고 있어요. 기본 음악은 계속됩니다. 직접 켜서 다시 시도할 수 있어요.';
+    return;
+  }
   if (connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType)) {
     document.querySelector('#semantic-summary').textContent = 'AI 단어 해석 · 다운로드';
     document.querySelector('#semantic-status').textContent = '데이터 절약 중 · 직접 켜서 다운로드';
