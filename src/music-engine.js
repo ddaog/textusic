@@ -1,5 +1,6 @@
 import { createRhythm } from './rhythm.js';
 import { phraseMelody } from './melody-rhythm.js';
+import { wordOrderSyncopation } from './word-order-rhythm.js';
 import { configurePlaybackSession } from './audio-session.js';
 import { blendPatterns, transitionWindow } from './semantic-transition.js';
 import { createModularPatch, compileModularVoices, patchDescriptions } from './modular-patch.js';
@@ -57,7 +58,7 @@ export function createArrangement(analysis, beat = {}) {
 export function createStrudelCode(analysis, beat = {}, { foundation } = {}) {
   const arrangement = createArrangement(foundation ? { ...foundation, syntax: analysis.syntax } : analysis, beat);
   const { chords, melody, richness, drums } = arrangement;
-  const phrasedMelody = phraseMelody(melody, (foundation ?? analysis).seed);
+  const phrasedMelody = phraseMelody(melody, (foundation ?? analysis).seed, wordOrderSyncopation(foundation ?? analysis));
   const { tension, rhythm } = arrangement;
   const root = foundation?.root ?? analysis.root;
   const scale = root + '4:' + arrangement.scale;

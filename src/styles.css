@@ -1376,4 +1376,11 @@ footer { min-height:28px; }
 }
 .stanza-status { grid-column:1/-1; margin:0; color:#758378; font:10px/1.6 var(--mono); letter-spacing:.04em; }
 .composer .word-token.is-playing-stanza { background-color:#879d801a; border-radius:3px; box-shadow:0 2px 0 #879d8055; }
+.expand-editor { position:absolute; right:8px; top:5px; z-index:8; border:0; background:var(--paper, #e7e9e4); color:#69716e; border-radius:8px; min-width:44px; min-height:32px; cursor:pointer; }
+.composer #sentence, .composer #sentence-highlight { padding-top:40px; }
+.visual-stanza { margin:0; text-align:center; font:11px monospace; color:#7e8b82; letter-spacing:.08em; }
+.editor-expanded { overflow:hidden; }
+.editor-expanded .composer .text-field-wrap { position:fixed; inset:12px; bottom:auto; height:calc(var(--visible-height, 100dvh) - 24px); z-index:100; background:#e1e4df; box-shadow:0 0 0 100vmax #e7e9e4; }
+.editor-expanded .composer #sentence { min-height:calc(var(--visible-height, 100dvh) - 26px); max-height:calc(var(--visible-height, 100dvh) - 26px); }
+.editor-expanded .composer #sentence, .editor-expanded .composer #sentence-highlight { padding:52px 24px 34px; }
 @media(prefers-reduced-motion:no-preference) { .word-token { transition:background-color .5s, box-shadow .5s; } }

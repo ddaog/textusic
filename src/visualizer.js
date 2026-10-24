@@ -249,6 +249,17 @@ export class Visualizer {
     ctx.moveTo(centerX + baseRadius * 0.62, centerY);
     ctx.arc(centerX, centerY, baseRadius * 0.62, 0, TAU);
     ctx.stroke();
+    if (this.stanza) {
+      const { count, index: activeIndex } = this.stanza;
+      for (let index = 0; index < count; index++) {
+        const start = -Math.PI / 2 + index * TAU / count;
+        ctx.strokeStyle = index === activeIndex ? 'rgba(232, 102, 61, .8)' : COLORS.grid;
+        ctx.lineWidth = index === activeIndex ? 3 : 1;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, baseRadius + 5, start + .025, start + TAU / count - .025);
+        ctx.stroke();
+      }
+    }
     ctx.strokeStyle = 'rgba(232, 102, 61, .72)';
     ctx.lineWidth = 2;
     ctx.beginPath();

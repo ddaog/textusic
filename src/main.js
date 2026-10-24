@@ -397,6 +397,18 @@ function updateStanzaIndicator() {
   label.hidden = count < 2;
   label.textContent = active ? `${position.index + 1}연 / ${count} · ${position.bar}/4 마디` : `${count}개의 연 · 각각 4마디씩 반복`;
   const section = active && count > 1 ? score.sections[position.index] : null;
+  const visualAnalysis = section?.analysis ?? analysis;
+  if (visualizer.analysis !== visualAnalysis) visualizer.setAnalysis(visualAnalysis);
+  visualizer.stanza = count > 1 ? { count, index: active ? position.index : -1 } : null;
+  const visualLabel = document.querySelector('#visual-stanza');
+  visualLabel.hidden = count < 2;
+  visualLabel.textContent = label.textContent;
+  elements.visualTitle.textContent = visualAnalysis.concepts.slice(0, 3).map(item => item.label).join(' · ') || '—';
+  for (const [axis, parts] of Object.entries(elements.dials)) {
+    const value = metricNumber(visualAnalysis.axes[axis]);
+    parts.value.textContent = String(value).padStart(2, '0');
+    parts.knob.style.setProperty('--dial-angle', `${-135 + value * 2.7}deg`);
+  }
   for (const word of elements.sentenceHighlight.querySelectorAll('.word-token')) {
     const start = Number(word.dataset.start);
     word.classList.toggle('is-playing-stanza', !!section && start >= section.start && start < section.end);
@@ -632,6 +644,7 @@ document.fonts.ready.then(() => { syncEditorLayout(); scheduleRelations(); });
 // Use the visible viewport, including the space left above a mobile keyboard.
 function syncViewport() {
   const height = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty('--visible-height', `${height}px`);
   document.documentElement.classList.toggle('compact-viewport', height < 540);
   syncEditorLayout();
   scheduleRelations();
@@ -639,6 +652,25 @@ function syncViewport() {
 window.visualViewport?.addEventListener('resize', syncViewport);
 window.addEventListener('resize', syncViewport);
 syncViewport();
+
+const expandEditor = document.querySelector('#expand-editor');
+function setEditorExpanded(expanded) {
+  document.body.classList.toggle('editor-expanded', expanded);
+  expandEditor.setAttribute('aria-expanded', String(expanded));
+  expandEditor.setAttribute('aria-label', expanded ? '텍스트 크게 보기 닫기' : '텍스트 크게 보기');
+  expandEditor.textContent = expanded ? '닫기 ↙' : '↗';
+  // Hide the surrounding controls from keyboard and assistive navigation too.
+  document.querySelectorAll('.site-header, .live-code-panel, .visual-panel, .composer > :not(.text-field-wrap), footer').forEach(node => { node.inert = expanded; });
+  syncEditorLayout();
+  scheduleRelations();
+}
+expandEditor.addEventListener('click', () => setEditorExpanded(expandEditor.getAttribute('aria-expanded') !== 'true'));
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && document.body.classList.contains('editor-expanded')) {
+    setEditorExpanded(false);
+    expandEditor.focus();
+  }
+});
 
 window.addEventListener('pagehide', () => {
   saveDraft(draftStorage, elements.sentence.value);

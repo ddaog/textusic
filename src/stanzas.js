@@ -19,6 +19,16 @@ export function stanzaPosition(cycle, count) {
   return { index:count ? Math.floor(bar / 4) % count : 0, bar:bar % 4 + 1 };
 }
 
+export function transitionVoices(current, next, beat) {
+  const nextArrangement = createArrangement(next.foundation, beat);
+  const destination = Number(nextArrangement.melody[0].split(' ').find(n => n !== '~') ?? 0);
+  // Only the last beat of bar four: a two-note pickup into the next motif.
+  const voices = [`n("<~ ~ ~ [~ ~ ~ [${destination - 2} ${destination - 1}]]>").scale("${next.analysis.root}4:${next.analysis.scale}").s("sine").attack(.008).decay(.08).sustain(0).release(.1).room(.12).gain(.032) /* BRIDGE */`];
+  const drums = createArrangement(current.foundation, beat).drums;
+  if (drums > 0) voices.push(`s("<~ ~ ~ [~ ~ ~ [white ~ white white]]>").hpf(1800).lpf(5000).attack(.002).decay(.045).sustain(0).release(.02).gain(${(drums * .055).toFixed(3)}) /* FILL */`);
+  return voices;
+}
+
 export function createStanzaScore(text, variation, beat, semantics = {}, foundation) {
   let songAnchor;
   const sections = splitStanzas(text).map((section, index) => {
@@ -37,6 +47,10 @@ export function createStanzaScore(text, variation, beat, semantics = {}, foundat
   });
   const bpm = sections[0]?.analysis.bpm ?? 84;
   if (sections.length < 2) return { text, sections, bpm, code:sections[0]?.code ?? '' };
+  sections.forEach((section,index) => {
+    const voices = transitionVoices(section, sections[(index + 1) % sections.length], beat);
+    section.code = section.code.slice(0,-2) + ',\n  ' + voices.join(',\n  ') + '\n)';
+  });
   const code = `setcpm(${(bpm / 4).toFixed(2)})\narrange(\n` + sections.map((section, index) => {
     const pattern = section.code.slice(section.code.indexOf('\n') + 1);
     return `// STANZA ${index + 1} · 4 BARS\n[4,\n${pattern}\n]`;

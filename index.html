@@ -30,6 +30,7 @@
             <div class="composer" aria-label="문장 음악 만들기">
               <label class="visually-hidden" for="sentence">문장 입력</label>
               <div class="text-field-wrap">
+                <button id="expand-editor" class="expand-editor" type="button" aria-expanded="false" aria-controls="sentence" aria-label="텍스트 크게 보기">↗</button>
                 <div id="sentence-highlight" class="sentence-highlight" aria-hidden="true"></div>
                 <svg id="relation-lines" class="relation-lines" aria-hidden="true"></svg>
                 <textarea
@@ -79,6 +80,7 @@
                 <summary>이렇게 해보세요</summary>
                 <p>빈 줄(엔터 두 번)로 연을 나눠보세요. 첫 연이 곡의 중심음·템포·리듬 모티프를 잡고, 뒤의 연은 자기 분위기로 4마디씩 이어집니다. 마지막 연 다음에는 처음부터 반복됩니다.</p>
                 <p>한 단어에서 시작해 문장을 쌓아보세요. 단어가 늘면 화음과 리듬이 더해집니다.</p>
+                <p>연 끝에는 짧은 연결 선율이 다음 연을 예고합니다. 일반적인 어순은 정박 위주로, 도치로 추정되는 어순은 당김음을 더 사용합니다. 어순 해석은 완벽하지 않을 수 있어요.</p>
                 <button type="button" data-prompt="달빛">달빛</button>
                 <button type="button" data-prompt="고요한 달빛이 천천히 바다를 비춘다.">고요한 달빛이 천천히 바다를 비춘다.</button>
                 <p>‘고요한’은 부드러운 음색을, ‘빠르게’는 움직임을 더합니다. 쉼표를 넣으면 연결선이 문장 구간을 나누고 음악의 여백이 늘어납니다.</p>
@@ -111,6 +113,7 @@
               </div>
             </div>
             <canvas id="visualizer" role="img" aria-label="문장의 정서와 음악 패턴을 궤도와 원경 저역 및 근경 상역 EQ로 표현한 애니메이션"></canvas>
+            <p id="visual-stanza" class="visual-stanza" hidden></p>
             <div class="visual-caption" aria-label="문장에서 읽은 악기 파라미터">
               <div class="micro-dial" style="--dial-color: #ef5b53">
                 <i class="micro-dial__knob" id="dial-warmth"></i><span><small>TONE</small><b id="dial-warmth-value">50</b></span>

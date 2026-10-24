@@ -1,4 +1,5 @@
 import { phraseMelody } from './melody-rhythm.js';
+import { wordOrderSyncopation } from './word-order-rhythm.js';
 // A bounded, feed-forward control patch. Audio stays VCO -> VCF -> VCA -> mixer.
 // Pitch/gate sequences are clocked CV equivalents, not a voltage simulator.
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -11,11 +12,13 @@ export function createModularPatch(analysis) {
     const axis = (name) => meanings.reduce((sum, word) => sum + (word.traits?.[name] ?? .5), 0) / Math.max(1, meanings.length);
     const seed = members.reduce((sum, word) => [...word.token].reduce((n, char) => n + char.codePointAt(0), sum), 0);
     const density = Math.min(6, 2 + Math.floor(members.length / 2));
+    const syncopation = wordOrderSyncopation({ syntax:{ words:members } });
     return { id, sentence, first:members[0].index, last:members.at(-1).index,
+      syncopation,
       cutoff:Math.round(clamp(600 + axis('light') * 1600, 350, 3200)),
       attack:clamp(.02 + axis('softness') * .1, .008, .15),
       period:axis('motion') > .55 ? 2 : axis('motion') > .25 ? 4 : 8,
-      gate:Array.from({length:8}, (_, step) => ((step * 5 + seed % 2) % 8) < density),
+      gate:Array.from({length:8}, (_, step) => syncopation < .35 ? step % 2 === 0 || (density > 4 && step === 3) : ((step * 5 + seed % 2) % 8) < density),
       pitch:Array.from({length:8}, (_, step) => [0, 2, 4, 6][(step + seed) % 4]),
       oscillator:meanings.some((word) => word.conceptIds.some((id) => ['fear', 'anger'].includes(id))) ? 'sawtooth' : 'triangle',
     };
@@ -53,7 +56,7 @@ export function compileModularVoices(patch, { chords, root, scale }) {
     const cutoff = modulation
       ? `sine.slow(${patch.modules[modulation.source].period}).range(${Math.round(module.cutoff * (1 - modulation.depth))},${Math.round(module.cutoff * (1 + modulation.depth))})`
       : String(module.cutoff);
-    const notes = alternate(phraseMelody(chords.map((chord) => gate.gate.map((open, step) => open ? chord + pitch.pitch[step] : '~').join(' ')), gate.id * 37));
+    const notes = alternate(phraseMelody(chords.map((chord) => gate.gate.map((open, step) => open ? chord + pitch.pitch[step] : '~').join(' ')), gate.id * 37, gate.syncopation));
     // Bounded mixer headroom; patching a control cannot raise the gain ceiling.
     const gain = (.115 / Math.sqrt(patch.modules.length)).toFixed(3);
     return `n("${notes}").scale("${root}4:${scale}").s("${module.oscillator}").lpf(${cutoff}).attack(${module.attack.toFixed(3)}).decay(.18).sustain(.12).release(.22).room(.2).gain(${gain}) /* M${module.id + 1}: VCO > VCF > VCA */`;

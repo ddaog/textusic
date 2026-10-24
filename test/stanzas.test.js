@@ -31,13 +31,13 @@ test('contrasting stanzas have independent music and one shared transport tempo'
 });
 
 test('melody phrasing combines long/short values, offbeats and a closing rest', () => {
-  const bars=phraseMelody(Array(4).fill('0 2 4 6 4 2 0 2'),42);
+  const bars=phraseMelody(Array(4).fill('0 2 4 6 4 2 0 2'),42,1);
   assert.equal(bars.length,4);
   assert.match(bars.join(' '),/@3/);
   assert.match(bars.join(' '),/\[~ /);
   assert.match(bars[3],/\[0@3 ~\]$/);
   assert.notEqual(bars[0],bars[1]);
-  assert.deepEqual(bars,phraseMelody(Array(4).fill('0 2 4 6 4 2 0 2'),42));
+  assert.deepEqual(bars,phraseMelody(Array(4).fill('0 2 4 6 4 2 0 2'),42,1));
 });
 
 test('real Strudel arrangement plays 4 bars of each stanza and loops', () => {
