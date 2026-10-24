@@ -1401,9 +1401,13 @@ footer { min-height:28px; }
 @media(prefers-reduced-motion:no-preference) { .word-token { transition:background-color .5s, box-shadow .5s; } }
 
 /* Keep the writing, rather than the cable mesh, in the foreground. */
-.relation-lines .relation-path { stroke-width:.65; animation:none; opacity:calc(.16 + var(--line-energy, 0) * .74); }
-.relation-lines .relation-path.is-patch { stroke-width:.85; opacity:calc(.2 + var(--line-energy, 0) * .8); }
-.relation-lines .relation-path.is-provisional { opacity:calc(.1 + var(--line-energy, 0) * .42); }
+.relation-lines .relation-path { stroke-width:.9; animation:none; opacity:calc(.26 + var(--line-energy, 0) * .64); }
+.relation-lines .relation-path.is-patch { stroke-width:1.1; opacity:calc(.26 + var(--line-energy, 0) * .64); }
+.relation-lines .relation-path.is-provisional { opacity:calc(.18 + var(--line-energy, 0) * .46); }
+.relation-lines stop { transition:stop-opacity var(--stanza-fade, 1000ms) ease; }
+.composer .word-token.is-other-stanza { opacity:.38; text-shadow:none; }
+.composer .word-token { transition:opacity .65s, background-color .5s, box-shadow .5s; }
+@media(prefers-reduced-motion:reduce) { .relation-lines stop, .composer .word-token { transition:none; } }
 .relation-lines .relation-point { fill:#7d8982; opacity:calc(.24 + var(--line-energy, 0) * .76); }
 @media (prefers-reduced-motion: reduce) {
   .relation-lines .relation-path { opacity:.26; }

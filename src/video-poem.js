@@ -41,10 +41,15 @@ export function drawVideoWords(ctx, parts, size, edges, energy = 0) {
   for (const edge of edges) {
     const a = centers.get(edge.fromStart), b = centers.get(edge.toStart);
     if (!a || !b) continue;
-    ctx.strokeStyle = edge.color; ctx.lineWidth = edge.type === 'patch' ? .85 : .65;
+    ctx.strokeStyle = edge.color; ctx.lineWidth = edge.type === 'patch' ? 1.1 : .9;
     ctx.setLineDash(edge.dash);
-    const active = Math.max(a.alpha, b.alpha);
-    ctx.globalAlpha = (.16 + energy * .74) * active * active;
+    ctx.globalAlpha = edge.provisional ? .18 + energy * .46 : .26 + energy * .64;
+    if (Math.abs(a.alpha - b.alpha) > .01 && (a.x !== b.x || a.y !== b.y)) {
+      const gradient = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+      gradient.addColorStop(0, cableAlpha(edge.color, a.alpha ** 2));
+      gradient.addColorStop(1, cableAlpha(edge.color, b.alpha ** 2));
+      ctx.strokeStyle = gradient;
+    } else ctx.globalAlpha *= a.alpha ** 2;
     ctx.beginPath(); ctx.moveTo(a.x, a.y);
     if (Math.abs(a.y - b.y) > size && ['patch', 'shared-subject'].includes(edge.type)) {
       const bend = Math.max(12, Math.min(a.x, b.x) - 20);
@@ -64,7 +69,7 @@ export function drawVideoWords(ctx, parts, size, edges, energy = 0) {
       ctx.globalAlpha = part.alpha; ctx.fillStyle = color;
     }
     if (word && ['spark', 'ray', 'prism', 'ember', 'jitter'].includes(word.effect)) {
-      ctx.shadowColor = accent; ctx.shadowBlur = Math.min(9, size * .25) * (.4 + energy * .6);
+      ctx.shadowColor = accent; ctx.shadowBlur = Math.min(9, size * .25) * (.4 + energy * .6) * part.alpha ** 2;
     }
     ctx.fillText(part.text, x, y); ctx.shadowBlur = 0;
     if (!word) continue;
@@ -88,4 +93,11 @@ export function drawVideoWords(ctx, parts, size, edges, energy = 0) {
     ctx.beginPath(); ctx.arc(p.x, p.y, 1.1, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
+}
+
+export function cableAlpha(color, alpha) {
+  const channels = color.startsWith('#')
+    ? [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16))
+    : color.match(/[\d.]+/g).map(Number);
+  return `rgba(${channels.slice(0, 3).join(',')},${alpha * (channels[3] ?? 1)})`;
 }

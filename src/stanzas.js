@@ -21,6 +21,17 @@ export function stanzaPosition(cycle, count) {
   return { index:count ? Math.floor(bar / 4) % count : 0, bar:bar % 4 + 1 };
 }
 
+// While a new score is pending, keep one corresponding stanza highlighted.
+// Exact text follows an unchanged stanza moved by edits; otherwise use its ordinal.
+export function visiblePlayingSection(text, score, cycle) {
+  const sections = splitStanzas(text);
+  if (!sections.length) return null;
+  const position = stanzaPosition(cycle, score?.sections?.length || sections.length);
+  const playing = score?.sections?.[position.index];
+  const matches = sections.filter(section => section.text === playing?.text);
+  return matches.length === 1 ? matches[0] : sections[Math.min(position.index, sections.length - 1)];
+}
+
 export function transitionVoices(current, next, beat) {
   const nextArrangement = createArrangement(next.foundation, beat);
   const currentArrangement = createArrangement(current.foundation, beat);

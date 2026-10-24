@@ -14,10 +14,16 @@ test('visual connections are bounded, deduplicated and preserve the source graph
   edges.push({from:1,to:0,type:'patch'});
   const original=structuredClone(edges);
   const result=quietConnections(edges,10,true);
-  assert.ok(result.length<=6);
+  assert.equal(result.length,8);
   assert.equal(result[0].type,'patch');
   assert.equal(new Set(result.map(e=>[e.from,e.to].sort((a,b)=>a-b).join(':'))).size,result.length);
   assert.deepEqual(edges,original);
+});
+
+test('more connections remain bounded on desktop and mobile', () => {
+  const edges = Array.from({length:40}, (_,i) => ({from:i,to:(i+1)%40,type:'modifier'}));
+  assert.equal(quietConnections(edges,40,true).length,10);
+  assert.equal(quietConnections(edges,40,false).length,14);
 });
 
 test('fan-out remains possible but cannot overwhelm one word', () => {

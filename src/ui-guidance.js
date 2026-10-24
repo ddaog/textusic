@@ -8,7 +8,7 @@ export function quietConnections(edges, count, compact = false) {
     || Math.abs(a.edge.to - a.edge.from) - Math.abs(b.edge.to - b.edge.from)
     || a.index - b.index);
   const pairs = new Set(), degree = new Map(), selected = [];
-  const limit = Math.min(compact ? 6 : 10, Math.max(1, Math.ceil(count / 2)));
+  const limit = Math.min(compact ? 10 : 14, Math.max(1, Math.ceil(count * .75)));
   for (const { edge } of sorted) {
     const { from, to } = edge;
     if (from === to || from < 0 || to < 0 || from >= count || to >= count) continue;

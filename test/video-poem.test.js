@@ -2,12 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { layoutVideoWords, updateVideoEmphasis, drawVideoWords } from '../src/video-poem.js';
 import { drawVideoFrame } from '../src/video-recorder.js';
+import { visiblePlayingSection, splitStanzas } from '../src/stanzas.js';
 
 function context() {
   const calls = [];
   const ctx = { calls, globalAlpha: 1, font: '',
     measureText(t) { return { width: t.length * 10 }; },
-    fillText(t) { calls.push({ text: t, alpha: this.globalAlpha, color: this.fillStyle }); },
+    fillText(t) { calls.push({ text: t, alpha: this.globalAlpha, color: this.fillStyle, blur:this.shadowBlur }); },
+    createLinearGradient() { const stops=[]; calls.push({stops}); return {addColorStop(offset,color) {stops.push({offset,color});}}; },
     save() {}, restore() { this.globalAlpha = 1; }, fillRect() {}, drawImage() {},
     setLineDash() {}, beginPath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
     stroke() { calls.push({ stroke: this.strokeStyle }); }, arc() {}, fill() {},
@@ -46,9 +48,35 @@ test('recording uses word colors, decorations and relations but no stanza readou
     active: { start: 0, end: 2 }, label: '지금 1연 / 2 · 1/4 마디', now: 0, energy: .5 });
   assert.equal(ctx.calls.find(c => c.text === '바다').color, '#123456');
   assert.equal(ctx.calls.find(c => c.text === '달빛').alpha, .38);
-  assert.ok(ctx.calls.some(c => c.stroke === '#789b8b'));
+  assert.ok(ctx.calls.some(c => c.stops?.[0].color === 'rgba(120,155,139,1)'));
   assert.ok(ctx.calls.some(c => c.stroke === '#abcdef'));
   assert.ok(!ctx.calls.some(c => c.text?.includes('마디')));
+});
+
+test('cross-stanza cables fade at the inactive endpoint and glow radius shrinks', () => {
+  const ctx=context();
+  const parts = [0,4].map((start,i)=>({start,end:start+2,text:'빛',x:36+i*50,y:100,width:30,
+    alpha:i ? .38 : 1,word:{start,color:'#123456',accent:'#abcdef',effect:'spark'}}));
+  drawVideoWords(ctx,parts,30,[{fromStart:0,toStart:4,type:'patch',color:'#789b8b',dash:[]}],1);
+  const stops=ctx.calls.find(c=>c.stops).stops;
+  assert.equal(stops[0].color,'rgba(120,155,139,1)');
+  assert.equal(stops[1].color,`rgba(120,155,139,${.38**2})`);
+  const words=ctx.calls.filter(c=>c.text);
+  assert.ok(words[1].blur < words[0].blur * .2);
+});
+
+test('editing a playing poem retains one visible active stanza including fallback frames', () => {
+  const old='바다\n\n달빛'; const score={text:old,sections:splitStanzas(old)};
+  for (const text of ['바다가\n\n달빛', '바다\n\n달빛이', '새 연\n\n바다\n\n달빛', '바다']) {
+    const active=visiblePlayingSection(text,score,4);
+    assert.ok(active && active.end <= text.length);
+    const ctx=context();
+    drawVideoFrame({getContext:()=>ctx},{},{text,active,now:0});
+    const lines=ctx.calls.filter(c=>text.includes(c.text) && c.text.trim());
+    assert.ok(lines.some(c=>c.alpha===1));
+    if (splitStanzas(text).length > 1) assert.ok(lines.some(c=>c.alpha===.38));
+  }
+  assert.equal(visiblePlayingSection('새 연\n\n바다\n\n달빛',score,4).start,9);
 });
 
 test('missing relation endpoints are safe when text is edited', () => {

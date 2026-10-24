@@ -40,19 +40,21 @@ export function drawVideoFrame(canvas, source, { text = '', scene, active, energ
   let layout = poemLayouts.get(canvas);
   if (layout?.text !== text || layout?.scene !== scene) {
     layout = { text, scene, ...fitVideoPoem(ctx, text, 468, 290, scene?.fontFamily) };
-    if (scene) layout.parts = layoutVideoWords(ctx, text, layout.lines, layout.size, scene.words);
+    layout.parts = layoutVideoWords(ctx, text, layout.lines, layout.size, scene?.words ?? []);
     poemLayouts.set(canvas, layout);
   }
-  const { lines, size } = layout;
+  const { size } = layout;
   ctx.font = `${size}px ${scene?.fontFamily || 'serif'}`;
   ctx.fillStyle = '#424b48';
+  updateVideoEmphasis(layout.parts, active, now - (layout.now ?? now), reducedMotion);
+  layout.now = now;
   if (scene) {
-    updateVideoEmphasis(layout.parts, active, now - (layout.now ?? now), reducedMotion);
-    layout.now = now;
     drawVideoWords(ctx, layout.parts, size, scene.edges, energy);
-  } else lines.forEach((line, index) => {
-    ctx.fillText(line, 36, 76 + size + index * size * 1.45);
+  } else layout.parts.forEach(part => {
+    ctx.globalAlpha = part.alpha;
+    ctx.fillText(part.text, part.x, part.y);
   });
+  ctx.globalAlpha = 1;
   if (source.width && source.height) {
     const scale = Math.min(500 / source.width, 460 / source.height);
     const w = source.width * scale, h = source.height * scale;

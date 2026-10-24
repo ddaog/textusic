@@ -4,7 +4,7 @@ import './code-layout.css';
 import { MusicRecorder } from './music-recorder.js';
 import { VideoRecorder } from './video-recorder.js';
 import { AudioSpectrum } from './audio-spectrum.js';
-import { createStanzaScore, stanzaPosition } from './stanzas.js';
+import { createStanzaScore, stanzaPosition, visiblePlayingSection } from './stanzas.js';
 import { readDraft, saveDraft, semanticStartupDelay, interruptedSemanticPreparation, markSemanticPreparation } from './session-safety.js';
 import { SemanticClient } from './semantic-client.js';
 import { addMeaningLinks } from './meaning-links.js';
@@ -358,6 +358,8 @@ function renderRelations(wordNodes) {
   const rect = svg.getBoundingClientRect();
   svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
   svg.replaceChildren();
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  svg.append(defs);
   const patch = createModularPatch(analysis);
   const sources = [...analysis.syntax.edges.filter((edge) => analysis.syntax.words[edge.from]?.sentence === analysis.syntax.words[edge.to]?.sentence),
     ...patch.cables.map((cable) => ({ ...cable, type:'patch', provisional:cable.normalled }))];
@@ -372,7 +374,7 @@ function renderRelations(wordNodes) {
         embedding: word.dataset.meaningSource === 'embedding' };
     }),
     edges: connections.filter(e => wordNodes[e.from] && wordNodes[e.to]).map(e => ({
-      fromStart: Number(wordNodes[e.from].dataset.start), toStart: Number(wordNodes[e.to].dataset.start), type: e.type,
+      fromStart: Number(wordNodes[e.from].dataset.start), toStart: Number(wordNodes[e.to].dataset.start), type: e.type, provisional: e.provisional,
       color: e.type === 'patch' ? ({ gate: '#b78a61', pitch: '#8683a9' }[e.kind] || '#789b8b')
         : ({ semantic: '#779b85', repetition: '#78928a', 'shared-subject': '#84948d' }[e.type] || 'rgba(65,69,71,.45)'),
       dash: e.provisional ? [2, 5] : e.type === 'semantic' ? [1, 5] : e.kind === 'gate' ? [3, 4] : [],
@@ -410,6 +412,19 @@ function renderRelations(wordNodes) {
     if (type === 'semantic' || type === 'repetition') path.classList.add(`is-${type}`);
     if (type === 'shared-subject') path.classList.add('is-shared');
     if (provisional) path.classList.add('is-provisional');
+    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    gradient.id = `relation-gradient-${from}-${to}`;
+    gradient.setAttribute('gradientUnits', 'userSpaceOnUse');
+    for (const [key, value] of Object.entries({ x1, y1, x2, y2 })) gradient.setAttribute(key, value);
+    const color = videoScene.edges.find(e => e.fromStart === Number(path.dataset.fromStart) && e.toStart === Number(path.dataset.toStart))?.color || '#78928a';
+    for (const offset of ['0', '1']) {
+      const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      stop.setAttribute('offset', offset); stop.setAttribute('stop-color', color);
+      gradient.append(stop);
+    }
+    defs.append(gradient);
+    path.style.stroke = `url(#${gradient.id})`;
+    path.dataset.gradient = gradient.id;
     svg.append(path);
     for (const [x, y] of [[x1, y1], [x2, y2]]) {
       const pointKey = `${x}:${y}`;
@@ -464,7 +479,7 @@ function updateStanzaIndicator() {
   const score = active ? engine.score : stanzaScore;
   const count = score.sections.length;
   const position = stanzaPosition(engine.repl?.scheduler.now() ?? 0, count);
-  const key = `${active}:${count}:${position.index}:${position.bar}`;
+  const key = `${active}:${count}:${position.index}:${position.bar}:${elements.sentence.value}`;
   if (key === stanzaIndicatorKey) return;
   stanzaIndicatorKey = key;
   const label = document.querySelector('#stanza-status');
@@ -488,14 +503,22 @@ function updateStanzaIndicator() {
     parts.value.textContent = String(value).padStart(2, '0');
     parts.knob.style.setProperty('--dial-angle', `${-135 + value * 2.7}deg`);
   }
+  const displaySection = engine.playing ? visiblePlayingSection(elements.sentence.value, engine.score, engine.repl?.scheduler.now() ?? 0) : null;
   for (const word of elements.sentenceHighlight.querySelectorAll('.word-token')) {
     const start = Number(word.dataset.start);
-    word.classList.toggle('is-playing-stanza', !!section && start >= section.start && start < section.end);
+    const inside = !!displaySection && start >= displaySection.start && start < displaySection.end;
+    word.classList.toggle('is-playing-stanza', inside);
+    word.classList.toggle('is-other-stanza', !!displaySection && !inside);
   }
-  const inSection = start => !!section && start >= section.start && start < section.end;
+  const inSection = start => !displaySection || (start >= displaySection.start && start < displaySection.end);
   for (const line of elements.relationLines.querySelectorAll('[data-from-start]')) {
-    const relevant = inSection(Number(line.dataset.fromStart)) || (line.dataset.toStart !== undefined && inSection(Number(line.dataset.toStart)));
-    line.classList.toggle('is-other-stanza', !!section && !relevant);
+    const fromActive = inSection(Number(line.dataset.fromStart));
+    line.classList.toggle('is-other-stanza', !line.dataset.gradient && !fromActive);
+    if (line.dataset.gradient) {
+      const stops = elements.relationLines.querySelectorAll(`#${line.dataset.gradient} stop`);
+      stops[0].style.stopOpacity = fromActive ? '1' : '.1444';
+      stops[1].style.stopOpacity = inSection(Number(line.dataset.toStart)) ? '1' : '.1444';
+    }
   }
 }
 
@@ -675,11 +698,9 @@ videoButton.addEventListener('click', async () => {
     videoRecording.start(module.getAudioContext(), module.getSuperdoughAudioController().output.destinationGain,
       document.querySelector('#visualizer'), () => {
         const score = engine.score;
-        const sections = score?.sections ?? [];
-        const position = stanzaPosition(engine.repl?.scheduler.now() ?? 0, sections.length || 1);
         return { text: elements.sentence.value,
           scene: videoScene?.text === elements.sentence.value ? videoScene : undefined,
-          active: score?.text === elements.sentence.value && sections.length > 1 ? sections[position.index] : null,
+          active: visiblePlayingSection(elements.sentence.value, score, engine.repl?.scheduler.now() ?? 0),
           energy: Math.pow(Math.max(0, ...spectrum.levels), 1.5),
           reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches };
       });
