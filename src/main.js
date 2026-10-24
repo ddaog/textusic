@@ -2,6 +2,7 @@ import './styles.css';
 import './reading.css';
 import './code-layout.css';
 import { MusicRecorder } from './music-recorder.js';
+import { AudioSpectrum } from './audio-spectrum.js';
 import { createStanzaScore, stanzaPosition } from './stanzas.js';
 import { readDraft, saveDraft, semanticStartupDelay, interruptedSemanticPreparation, markSemanticPreparation } from './session-safety.js';
 import { SemanticClient } from './semantic-client.js';
@@ -81,7 +82,11 @@ const recording = new MusicRecorder((blob, extension) => {
   document.querySelector('#record-status').textContent = status;
   document.querySelector('#record-button').textContent = recording.active ? '■ 녹음 끝내기' : '● 음악 녹음';
 });
-engine.onOutput = (output) => recording.connect(output);
+const spectrum = new AudioSpectrum();
+engine.onOutput = (output) => {
+  recording.connect(output);
+  try { spectrum.connect(output); } catch { /* Visualization must never interrupt music. */ }
+};
 let variation = 0;
 let analysis = analyzeText(elements.sentence.value, variation);
 analysis.syntax = addMeaningLinks(analyzeSyntax(elements.sentence.value));
@@ -91,6 +96,8 @@ analysis.bpm = initialArrangement.bpm;
 analysis.scale = initialArrangement.scale;
 let code = createStrudelCode(analysis, beat);
 const visualizer = new Visualizer(elements.canvas, analysis);
+visualizer.spectrum = spectrum;
+document.addEventListener('visibilitychange', () => spectrum.setActive(engine.playing && !document.hidden));
 visualizer.playbackCycle = () => engine.playing ? Math.max(0, engine.repl.scheduler.now() % 1) : 0;
 let updateTimer;
 let audioTask = null;
@@ -439,6 +446,7 @@ function stopPlayback(message = '연주를 멈췄어요. 문장을 바꾸거나 
   autoPlayEnabled = false;
   audioRevision += 1;
   engine.stop();
+  spectrum.setActive(false);
   recording.stop();
   visualizer.setPlaying(false);
   updatePlaybackStatus();
@@ -465,6 +473,7 @@ async function applyLatestAudio() {
       if (revision !== audioRevision || !autoPlayEnabled) return;
     } while (appliedCode !== code);
     if (!visualizer.playing) visualizer.setPlaying(true);
+    spectrum.setActive(!document.hidden);
     updatePlaybackStatus();
     elements.status.textContent = `${analysis.root} ${analysis.scale.replace(':', ' ')} · ${analysis.bpm} BPM · 단어의 결을 따라 연주 중`;
   })()
@@ -474,6 +483,7 @@ async function applyLatestAudio() {
         autoPlayEnabled = false;
         elements.status.textContent = '소리가 준비되지 않았어요. 문장을 한 번 더 눌러 시작해보세요.';
         engine.stop();
+        spectrum.setActive(false);
       }
     })
     .finally(() => {

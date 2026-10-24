@@ -266,19 +266,26 @@ export class Visualizer {
     ctx.arc(centerX, centerY, baseRadius, -Math.PI / 2, -Math.PI / 2 + cycle * TAU);
     ctx.stroke();
     const words = analysis.tokenMeanings.slice(0, 12);
+    const levels = this.spectrum?.read(time);
     words.forEach((meaning, index) => {
-      const angle = -Math.PI / 2 + (index / Math.max(1, words.length)) * TAU + (this.playing ? cycle * .12 : 0);
+      const angle = -Math.PI / 2 + (index / Math.max(1, words.length)) * TAU;
       const radius = meaning.layer === 'far' ? baseRadius * .8 : baseRadius * .5;
       const profile = visualProfileForToken(meaning.primaryConcept, meaning.token, meaning.traits);
+      // A visual association with an output band, not isolated word/voice metering.
+      const band = (meaning.layer === 'far' ? 0 : 4) + Math.round(clamp(meaning.traits?.light ?? .5) * 5);
+      const energy = this.playing ? (levels?.[band] ?? 0) : 0;
+      ctx.globalAlpha = .15 + .85 * energy;
       ctx.fillStyle = profile.color;
       ctx.beginPath();
       ctx.arc(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius, meaning.layer === 'far' ? 2.6 : 3.4, 0, TAU);
       ctx.fill();
     });
+    ctx.globalAlpha = this.playing ? .2 + .8 * Math.max(0, ...(levels ?? [])) : .2;
     ctx.fillStyle = '#e8663d';
     ctx.beginPath();
     ctx.arc(centerX, centerY, 3, 0, TAU);
     ctx.fill();
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
@@ -426,29 +433,16 @@ export class Visualizer {
   }
 
   drawGraphs(time) {
-    const { context: ctx, width, height, analysis } = this;
-    this.graphAxes ??= { ...analysis.axes };
-    for (const axis of Object.keys(analysis.axes)) {
-      this.graphAxes[axis] += (analysis.axes[axis] - this.graphAxes[axis]) * (this.reducedMotion ? 1 : .08);
-    }
-    const axes = this.graphAxes;
-    const stacked = false;
-    const margin = 4, gap = 10, panelHeight = height < 180 ? 58 : height < 300 ? 78 : 110;
-    const panelWidth = stacked ? width - margin * 2 : (width - margin * 2 - gap) / 2;
+    const { context: ctx, width, height } = this;
+    const levels = this.spectrum?.read(time);
+    const margin = 4, panelHeight = height < 180 ? 58 : height < 300 ? 78 : 110;
+    const panelWidth = width - margin * 2;
     const top = height - panelHeight - 4;
-    for (let panel = 0; panel < 2; panel += 1) {
-      const x = margin + (stacked ? 0 : panel * (panelWidth + gap));
-      const y = top + (stacked ? panel * (panelHeight + gap) : 0);
-      const ink = panel ? '#c97855' : '#668c86';
-      const gains = panel
-        ? [.15 + axes.tension * .15, .35 + axes.motion * .28, .4 + axes.light * .3]
-        : [.5 + axes.warmth * .25, .23 + axes.space * .25, .1 + axes.light * .16];
+    {
+      const x = margin, y = top;
+      const ink = '#668c86';
       const left = x + 10, right = x + panelWidth - 10;
       const plotTop = y + 26, bottom = y + panelHeight - 16;
-      const response = (t) => clamp(gains.reduce((sum, value, i) => {
-        const distance = (t - [.13, .5, .87][i]) / .22;
-        return sum + value * Math.exp(-.5 * distance * distance);
-      }, .04), .02, .96);
       ctx.save();
       ctx.beginPath();
       ctx.roundRect(x, y, panelWidth, panelHeight, 10);
@@ -457,10 +451,9 @@ export class Visualizer {
       ctx.textAlign = 'left';
       ctx.font = '500 9px ui-monospace, monospace';
       ctx.fillStyle = ink;
-      ctx.fillText(panel ? '근경 / MELODY' : '원경 / BASS', left, y + 16);
+      ctx.fillText('OUTPUT / SPECTRUM', left, y + 16);
       ctx.textAlign = 'right'; ctx.font = '8px ui-monospace, monospace';
-      ctx.fillStyle = '#929b92'; if (panelWidth > 160) ctx.fillText('음색', right, y + 16);
-      // Semantic tone bands, not an FFT or a measured audio spectrum.
+      ctx.fillStyle = '#929b92'; if (panelWidth > 230) ctx.fillText(this.playing ? '실시간 출력' : '재생 대기', right, y + 16);
       for (let row = 0; row <= 3; row++) {
         const py = plotTop + (bottom - plotTop) * row / 3;
         ctx.strokeStyle = '#dce1da'; ctx.lineWidth = .5;
@@ -473,13 +466,10 @@ export class Visualizer {
         ctx.textAlign = i === 0 ? 'left' : i === 2 ? 'right' : 'center';
         ctx.fillStyle = '#9aa296'; ctx.fillText(['LOW', 'MID', 'AIR'][i], px, bottom + 11);
       }
-      const points = Array.from({ length: 65 }, (_, i) => [
-        left + (right - left) * i / 64,
-        bottom - response(i / 64) * (bottom - plotTop),
-      ]);
       const bands = 12, stride = (right - left) / bands;
       for (let band = 0; band < bands; band++) {
-        const value = response((band + .5) / bands);
+        const value = levels?.[band] ?? 0;
+        const ink = band < 4 ? '#668c86' : band < 8 ? '#8c9380' : '#c97855';
         const px = left + stride * band + 1.5;
         const barWidth = Math.max(1, stride - 3);
         const barHeight = value * (bottom - plotTop);
@@ -490,8 +480,6 @@ export class Visualizer {
         ctx.fillStyle = ink;
         ctx.fillRect(px, bottom - barHeight, barWidth, 1.5);
       }
-      ctx.beginPath(); points.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py));
-      ctx.strokeStyle = withAlpha(ink, .65); ctx.lineWidth = .8; ctx.stroke();
       ctx.restore();
     }
   }
@@ -512,7 +500,7 @@ export class Visualizer {
   }
 
   frame(now) {
-    if (!this.width || !this.height) {
+    if (document.hidden || !this.width || !this.height) {
       requestAnimationFrame(this.frame);
       return;
     }
