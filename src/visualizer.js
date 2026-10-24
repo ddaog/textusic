@@ -459,7 +459,13 @@ export class Visualizer {
       ctx.fillStyle = ink;
       ctx.fillText(panel ? '근경 / MELODY' : '원경 / BASS', left, y + 16);
       ctx.textAlign = 'right'; ctx.font = '8px ui-monospace, monospace';
-      ctx.fillStyle = '#929b92'; if (panelWidth > 220) ctx.fillText('TONE', right, y + 16);
+      ctx.fillStyle = '#929b92'; if (panelWidth > 160) ctx.fillText('음색', right, y + 16);
+      // Semantic tone bands, not an FFT or a measured audio spectrum.
+      for (let row = 0; row <= 3; row++) {
+        const py = plotTop + (bottom - plotTop) * row / 3;
+        ctx.strokeStyle = '#dce1da'; ctx.lineWidth = .5;
+        ctx.beginPath(); ctx.moveTo(left, py); ctx.lineTo(right, py); ctx.stroke();
+      }
       for (let i = 0; i < 3; i += 1) {
         const px = left + (right - left) * (i / 2);
         ctx.strokeStyle = '#dde2d9'; ctx.lineWidth = .7;
@@ -471,18 +477,21 @@ export class Visualizer {
         left + (right - left) * i / 64,
         bottom - response(i / 64) * (bottom - plotTop),
       ]);
-      const wash = ctx.createLinearGradient(0, plotTop, 0, bottom);
-      wash.addColorStop(0, withAlpha(ink, .17)); wash.addColorStop(1, withAlpha(ink, .01));
-      ctx.beginPath(); ctx.moveTo(left, bottom);
-      points.forEach(([px, py]) => ctx.lineTo(px, py));
-      ctx.lineTo(right, bottom); ctx.closePath(); ctx.fillStyle = wash; ctx.fill();
-      ctx.beginPath(); points.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py));
-      ctx.strokeStyle = ink; ctx.lineWidth = 1.7; ctx.stroke();
-      if (this.playing) {
-        const t = this.getCycle(time);
-        const px = left + (right - left) * t, py = bottom - response(t) * (bottom - plotTop);
-        ctx.beginPath(); ctx.arc(px, py, 3, 0, TAU); ctx.fillStyle = ink; ctx.fill();
+      const bands = 12, stride = (right - left) / bands;
+      for (let band = 0; band < bands; band++) {
+        const value = response((band + .5) / bands);
+        const px = left + stride * band + 1.5;
+        const barWidth = Math.max(1, stride - 3);
+        const barHeight = value * (bottom - plotTop);
+        ctx.fillStyle = withAlpha(ink, .06);
+        ctx.fillRect(px, plotTop, barWidth, bottom - plotTop);
+        ctx.fillStyle = withAlpha(ink, .28);
+        ctx.fillRect(px, bottom - barHeight, barWidth, barHeight);
+        ctx.fillStyle = ink;
+        ctx.fillRect(px, bottom - barHeight, barWidth, 1.5);
       }
+      ctx.beginPath(); points.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py));
+      ctx.strokeStyle = withAlpha(ink, .65); ctx.lineWidth = .8; ctx.stroke();
       ctx.restore();
     }
   }

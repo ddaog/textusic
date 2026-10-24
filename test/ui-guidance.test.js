@@ -2,6 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { quietConnections, MUSIC_TIPS, nextTipIndex } from '../src/ui-guidance.js';
 
+test('thirty distinct, nonempty writing and music tips are available', () => {
+  assert.equal(MUSIC_TIPS.length, 30);
+  assert.equal(new Set(MUSIC_TIPS.map(t => t.topic)).size, 30);
+  assert.equal(new Set(MUSIC_TIPS.map(t => t.text)).size, 30);
+  assert.ok(MUSIC_TIPS.every(t => t.topic.trim() && t.text.trim()));
+});
+
 test('visual connections are bounded, deduplicated and preserve the source graph', () => {
   const edges=Array.from({length:30},(_,i)=>({from:i%10,to:(i+1)%10,type:'modifier'}));
   edges.push({from:1,to:0,type:'patch'});
