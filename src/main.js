@@ -88,6 +88,8 @@ let relationFrame;
 let composing = false;
 let semanticState = { text: '', meanings: {}, similarities: [] };
 let semanticReady = false;
+let musicFoundation = null;
+let semanticTransitionCode = null;
 function updateSemanticSummary() {
   if (!semanticReady) return;
   const words = analysis.tokenMeanings.filter((word) => word.meaningSource === 'embedding').length;
@@ -99,7 +101,7 @@ const semanticClient = new SemanticClient({
   onResult(text, result) {
     if (composing || text !== elements.sentence.value) return;
     semanticState = { text, ...result };
-    analyzeCurrentText({ keepVariation: true, refreshSemantics: false });
+    analyzeCurrentText({ keepVariation: true, refreshSemantics: false, semanticUpdate: true });
     if (autoPlayEnabled && engine.playing) applyLatestAudio();
   },
   onStatus(status, progress) {
@@ -123,7 +125,7 @@ const semanticClient = new SemanticClient({
       document.querySelector('#semantic-enabled').checked = false;
       semanticState = { text: '', meanings: {}, similarities: [] };
       if (!composing) {
-        analyzeCurrentText({ keepVariation: true, refreshSemantics: false });
+        analyzeCurrentText({ keepVariation: true, refreshSemantics: false, semanticUpdate: true });
         if (autoPlayEnabled && engine.playing) applyLatestAudio();
       }
     }
@@ -345,15 +347,18 @@ function renderRelations(wordNodes) {
   }
 }
 
-function analyzeCurrentText({ keepVariation = false, refreshSemantics = true } = {}) {
+function analyzeCurrentText({ keepVariation = false, refreshSemantics = true, semanticUpdate = false } = {}) {
   if (!keepVariation) variation = 0;
   const text = elements.sentence.value;
   analysis = analyzeText(text, variation, semanticClient.enabled ? semanticState.meanings : {});
   analysis.syntax = addMeaningLinks(analyzeSyntax(text), semanticClient.enabled && semanticState.text === text ? semanticState.similarities : []);
-  const arrangement = createArrangement(analysis, beat);
+  if (!semanticUpdate || musicFoundation?.text !== text) musicFoundation = structuredClone(analysis);
+  const arrangement = createArrangement({ ...musicFoundation, syntax: analysis.syntax }, beat);
+  analysis.root = musicFoundation.root;
   analysis.bpm = arrangement.bpm;
   analysis.scale = arrangement.scale;
-  code = createStrudelCode(analysis, beat);
+  code = createStrudelCode(analysis, beat, { foundation: musicFoundation });
+  semanticTransitionCode = semanticUpdate ? code : null;
   renderAnalysis();
   if (refreshSemantics) semanticClient.request(text, analysis.tokens);
 }
@@ -384,7 +389,15 @@ async function applyLatestAudio() {
   audioTask = (async () => {
     do {
       appliedCode = code;
-      await engine.play(appliedCode);
+      const semantic = appliedCode === semanticTransitionCode;
+      try {
+        await engine.play(appliedCode, { semantic });
+      } catch (error) {
+        if (!semantic || !engine.playing) throw error;
+        // Keep the existing transport alive if an optional AI update fails.
+        elements.status.textContent = 'AI 합류를 잠시 미뤘어요. 기존 연주는 계속됩니다.';
+        return;
+      }
       if (revision !== audioRevision || !autoPlayEnabled) return;
     } while (appliedCode !== code);
     if (!visualizer.playing) visualizer.setPlaying(true);

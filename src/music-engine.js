@@ -1,5 +1,6 @@
 import { createRhythm } from './rhythm.js';
 import { configurePlaybackSession } from './audio-session.js';
+import { blendPatterns, transitionWindow } from './semantic-transition.js';
 import { createModularPatch, compileModularVoices, patchDescriptions } from './modular-patch.js';
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const ramp = (value) => { const x = clamp(value, 0, 1); return x * x * (3 - 2 * x); };
@@ -51,13 +52,14 @@ export function createArrangement(analysis, beat = {}) {
   };
 }
 
-export function createStrudelCode(analysis, beat = {}) {
-  const arrangement = createArrangement(analysis, beat);
+export function createStrudelCode(analysis, beat = {}, { foundation } = {}) {
+  const arrangement = createArrangement(foundation ? { ...foundation, syntax: analysis.syntax } : analysis, beat);
   const { chords, melody, richness, drums } = arrangement;
   const { tension, rhythm } = arrangement;
-  const scale = analysis.root + '4:' + arrangement.scale;
-  const bassScale = analysis.root + '2:' + arrangement.scale;
-  const padScale = analysis.root + '3:' + arrangement.scale;
+  const root = foundation?.root ?? analysis.root;
+  const scale = root + '4:' + arrangement.scale;
+  const bassScale = root + '2:' + arrangement.scale;
+  const padScale = root + '3:' + arrangement.scale;
   const alternate = (bars) => '<' + bars.map((bar) => '[' + bar + ']').join(' ') + '>';
   const cutoff = Math.round(850 + analysis.axes.light * 1500);
   const room = ((0.24 + analysis.axes.space * 0.28) * (1 - tension * .55)).toFixed(2);
@@ -76,8 +78,17 @@ export function createStrudelCode(analysis, beat = {}) {
   if (analysis.tokens.length < 3) parts.splice(2, 1);
   if (analysis.tokens.length < 2) parts.splice(1, 1);
   const patch = createModularPatch(analysis);
+  if (foundation) {
+    const original = createModularPatch(foundation);
+    patch.modules.forEach((module, index) => {
+      const base = original.modules[index];
+      if (base) { module.gate = base.gate; module.pitch = base.pitch; module.oscillator = base.oscillator; }
+    });
+    // AI can enrich filter links, but must not rewrite the playing pitch/gate sequence.
+    patch.cables = [...patch.cables.filter(c => c.kind === 'cutoff'), ...original.cables.filter(c => c.kind !== 'cutoff')];
+  }
   if (patch.modules.length > 1) {
-    parts.splice(0, 1, ...compileModularVoices(patch, { chords, root:analysis.root, scale:arrangement.scale }));
+    parts.splice(0, 1, ...compileModularVoices(patch, { chords, root, scale:arrangement.scale }));
   }
   if (arrangement.relationGain) {
     parts.push('n("' + alternate(arrangement.relationMelody) + '").scale("' + scale + '").s("sine").pan(.65).attack(.015).decay(.12).sustain(0).release(.2).gain(' + gain(arrangement.relationGain) + ')');
@@ -110,7 +121,15 @@ export class MusicEngine {
       // network/initialization attempt to be retried without reloading the page.
       this.module = Promise.resolve().then(() => this.loadModule());
       this.initializing = this.module
-        .then((module) => { this.audioModule = module; return module.initStrudel(); })
+        .then((module) => {
+          this.audioModule = module;
+          return module.initStrudel({ editPattern: (pattern) => {
+            if (!this.semanticUpdate || !this.playing || !this.repl.scheduler.started) return pattern;
+            const window = transitionWindow(this.repl.scheduler);
+            this.transitionEnd = window.end;
+            return blendPatterns(module.Pattern, this.repl.scheduler.pattern, pattern, window);
+          } });
+        })
         .then((repl) => {
           this.repl = repl;
           this.ready = true;
@@ -123,7 +142,7 @@ export class MusicEngine {
     await this.initializing;
   }
 
-  async play(code) {
+  async play(code, { semantic = false } = {}) {
     configurePlaybackSession();
     const revision = ++this.revision;
     await this.init();
@@ -131,15 +150,20 @@ export class MusicEngine {
     const context = this.audioModule.getAudioContext?.();
     if (context && context.state !== 'running') await context.resume();
     if (revision !== this.revision) return;
+    if (this.playing && code === this.lastCode) return;
     // Global hush is replaced by Strudel's evaluation scope with a pattern
     // reset helper. Keep the actual REPL transport instead of using globals.
-    await this.repl.evaluate(code, false);
+    this.semanticUpdate = semantic;
+    // An AI update never changes the transport tempo or resets the clock.
+    const source = semantic && this.playing ? code.replace(/^setcpm\([^\n]+\)\n/, '') : code;
+    await this.repl.evaluate(source, false);
     if (this.onOutput) this.onOutput(this.audioModule.getSuperdoughAudioController().output.destinationGain);
     if (revision !== this.revision) return;
     if (this.repl.state?.evalError) throw this.repl.state.evalError;
     if (!this.repl.scheduler.started) await this.repl.start();
     if (revision !== this.revision) { this.repl.stop(); return; }
     this.playing = true;
+    this.lastCode = code;
   }
 
   stop() {
