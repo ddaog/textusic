@@ -1392,10 +1392,14 @@ footer { min-height:28px; }
 @media(prefers-reduced-motion:no-preference) { .word-token { transition:background-color .5s, box-shadow .5s; } }
 
 /* Keep the writing, rather than the cable mesh, in the foreground. */
-.relation-lines .relation-path { stroke-width:.65; opacity:.26; }
-.relation-lines .relation-path.is-patch { stroke-width:.85; opacity:.36; }
-.relation-lines .relation-path.is-provisional { opacity:.14; }
-.relation-lines .relation-point { fill:#7d8982; opacity:.45; }
+.relation-lines .relation-path { stroke-width:.65; animation:none; opacity:calc(.16 + var(--line-energy, 0) * .74); }
+.relation-lines .relation-path.is-patch { stroke-width:.85; opacity:calc(.2 + var(--line-energy, 0) * .8); }
+.relation-lines .relation-path.is-provisional { opacity:calc(.1 + var(--line-energy, 0) * .42); }
+.relation-lines .relation-point { fill:#7d8982; opacity:calc(.24 + var(--line-energy, 0) * .76); }
+@media (prefers-reduced-motion: reduce) {
+  .relation-lines .relation-path { opacity:.26; }
+  .relation-lines .relation-point { opacity:.45; }
+}
 .music-tip { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:5px 24px; max-width:1000px; margin:16px auto 8px; padding:12px 0; color:#65706a; font-size:13px; line-height:1.7; }
 .tip-topic { grid-column:1; color:#424d47; font-size:12px; font-weight:500; line-height:1.5; }
 .music-tip p { grid-column:1; margin:0; min-height:3.4em; max-width:76ch; word-break:keep-all; overflow-wrap:anywhere; }

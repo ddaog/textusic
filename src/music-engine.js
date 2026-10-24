@@ -1,5 +1,6 @@
 import { createRhythm } from './rhythm.js';
 import { ambientHarmony } from './ambient-harmony.js';
+import { degreeSemitone } from './tonal-transition.js';
 import { CHORD_PROGRESSIONS, MELODY_CONTOURS } from './music-materials.js';
 import { phraseMelody } from './melody-rhythm.js';
 import { wordOrderSyncopation } from './word-order-rhythm.js';
@@ -57,7 +58,7 @@ export function createArrangement(analysis, beat = {}) {
   };
 }
 
-export function createStrudelCode(analysis, beat = {}, { foundation } = {}) {
+export function createStrudelCode(analysis, beat = {}, { foundation, nextFoundation } = {}) {
   const arrangement = createArrangement(foundation ? { ...foundation, syntax: analysis.syntax } : analysis, beat);
   const { chords, melody, richness, drums } = arrangement;
   const phrasedMelody = phraseMelody(melody, (foundation ?? analysis).seed, wordOrderSyncopation(foundation ?? analysis));
@@ -71,7 +72,13 @@ export function createStrudelCode(analysis, beat = {}, { foundation } = {}) {
   const room = ((0.24 + analysis.axes.space * 0.28) * (1 - tension * .55)).toFixed(2);
   const attack = ((0.025 + analysis.axes.softness * 0.09) * (1 - tension * .8)).toFixed(3);
   const gain = (value) => value.toFixed(3);
-  const ambient = ambientHarmony(chords, (foundation ?? analysis).seed, tension);
+  let boundary;
+  if (nextFoundation) {
+    const next = createArrangement(nextFoundation, beat);
+    const opening = ambientHarmony(next.chords, nextFoundation.seed, next.tension).voicings[0];
+    boundary = {mode:arrangement.scale, target:opening.map(n=>degreeSemitone(n,next.scale))};
+  }
+  const ambient = ambientHarmony(chords, (foundation ?? analysis).seed, tension, boundary);
   const chordPattern = '<' + ambient.voicings.map(notes => '[' + notes.join(',') + ']').join(' ') + '>';
   const padCutoff = `sine.slow(${ambient.breath}).range(${Math.round(550 + analysis.axes.light * 350)},${Math.round(1000 + analysis.axes.light * 850)})`;
   const bass = alternate(chords.map((root) => root + ' ~ ~ ~ ' + root + ' ~ ' + (richness > 0.65 ? root + 4 : '~') + ' ~'));

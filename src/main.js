@@ -655,7 +655,14 @@ elements.copyCode.addEventListener('click', async () => {
   }
 });
 
+let lastLineMeter = -Infinity;
 window.addEventListener('formyiru:cycle', (event) => {
+  const now = performance.now();
+  if (now - lastLineMeter >= 1000 / 15) {
+    lastLineMeter = now;
+    const energy = engine.playing ? Math.max(0, ...spectrum.levels) : 0;
+    elements.relationLines.style.setProperty('--line-energy', Math.pow(energy, 1.5).toFixed(3));
+  }
   const cycle = engine.playing ? engine.repl.scheduler.now() : 0;
   elements.cycleValue.textContent = Math.max(0, cycle % 1).toFixed(2).padStart(5, '0');
   updateStanzaIndicator();

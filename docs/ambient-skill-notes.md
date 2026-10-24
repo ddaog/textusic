@@ -46,3 +46,19 @@ The UI derives counts from the generator's shared catalogs: four progressions,
 twelve contours, twelve grooves and four pad colors give 2,304 theoretical
 ingredient combinations. These are not guaranteed independently reachable or
 audibly distinct songs: text, seeds and emotional rules constrain selection.
+
+## Stanza seams
+
+Installed `strudel-arrangement` and `strudel-transitions` from the same pinned
+repository revision. Applied their common-material, restrained bridging and
+subtractive-arrangement guidance, not their workspace-specific player behavior
+or generic long-form EDM section lengths. Our stanzas remain four bars.
+
+The final pad voicing now considers the next stanza's opening chord in actual
+semitones, including major/minor changes. The two-note pickup first uses a shared
+outgoing chord tone in the next mode, then previews the next melodic motif.
+Calm arrivals get a quieter two-hit fill instead of three. These rules include
+the final-to-first seam. No extra layers, samples, FFTs, or AI inference are added.
+The ingredient catalog count stays unchanged: these are connection rules, not
+new independently selectable musical materials. Musical smoothness remains a
+listening judgment; symbolic tests cannot establish it by themselves.

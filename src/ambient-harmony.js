@@ -1,8 +1,9 @@
 // Scale degrees, not semitones: preserve the stanza's existing major/minor mode.
 import { PAD_COLORS as COLORS } from './music-materials.js';
+import { degreeSemitone } from './tonal-transition.js';
 const motion = (a,b) => a.reduce((sum,n,i)=>sum+Math.abs(n-b[i]),0);
 
-export function ambientHarmony(chords, seed, tension = 0) {
+export function ambientHarmony(chords, seed, tension = 0, boundary) {
   const color = tension > 0 ? 0 : (seed >>> 5) % COLORS.length;
   const shape = COLORS[color];
   const first = shape.map(n => n + chords[0]);
@@ -17,7 +18,10 @@ export function ambientHarmony(chords, seed, tension = 0) {
       }
     }
     const previous=voicings.at(-1);
-    const cost=notes=>motion(previous,notes)+(bar===chords.length-1?motion(notes,first)*.5:0);
+    const seam = notes => boundary
+      ? motion(notes.map(n=>degreeSemitone(n,boundary.mode)),boundary.target)
+      : motion(notes,first);
+    const cost=notes=>motion(previous,notes)+(bar===chords.length-1?seam(notes)*.5:0);
     candidates.sort((a,b)=>cost(a)-cost(b));
     voicings.push(candidates[0]);
   }

@@ -2,6 +2,8 @@ import { analyzeText } from './text-analyzer.js';
 import { analyzeSyntax } from './syntax.js';
 import { addMeaningLinks } from './meaning-links.js';
 import { createArrangement, createStrudelCode } from './music-engine.js';
+import { createModularPatch } from './modular-patch.js';
+import { bridgeDegrees } from './tonal-transition.js';
 
 export function splitStanzas(text) {
   const sections = [];
@@ -21,11 +23,15 @@ export function stanzaPosition(cycle, count) {
 
 export function transitionVoices(current, next, beat) {
   const nextArrangement = createArrangement(next.foundation, beat);
-  const destination = Number(nextArrangement.melody[0].split(' ').find(n => n !== '~') ?? 0);
+  const currentArrangement = createArrangement(current.foundation, beat);
+  const modules = createModularPatch(next.foundation).modules;
+  const destination = modules.length > 1 ? modules[0].pitch[0] : Number(nextArrangement.melody[0].split(' ').find(n => n !== '~') ?? 0);
+  const [shared, landing] = bridgeDegrees(currentArrangement.chords.at(-1), currentArrangement.scale, nextArrangement.scale, destination);
   // Only the last beat of bar four: a two-note pickup into the next motif.
-  const voices = [`n("<~ ~ ~ [~ ~ ~ [${destination - 2} ${destination - 1}]]>").scale("${next.analysis.root}4:${next.analysis.scale}").s("sine").attack(.008).decay(.08).sustain(0).release(.1).room(.12).gain(.032) /* BRIDGE */`];
-  const drums = createArrangement(current.foundation, beat).drums;
-  if (drums > 0) voices.push(`s("<~ ~ ~ [~ ~ ~ [white ~ white white]]>").hpf(1800).lpf(5000).attack(.002).decay(.045).sustain(0).release(.02).gain(${(drums * .055).toFixed(3)}) /* FILL */`);
+  const voices = [`n("<~ ~ ~ [~ ~ ~ [${shared} ${landing}]]>").scale("${next.analysis.root}4:${next.analysis.scale}").s("sine").attack(.025).decay(.12).sustain(0).release(.22).room(.12).gain(.028) /* BRIDGE */`];
+  const drums = currentArrangement.drums;
+  const calmArrival = next.foundation.axes.motion < .5 && nextArrangement.tension === 0;
+  if (drums > 0) voices.push(`s("<~ ~ ~ [~ ~ ~ [white ~ ${calmArrival ? '~' : 'white'} white]]>").hpf(1800).lpf(5000).attack(.002).decay(.045).sustain(0).release(.02).gain(${(drums * (calmArrival ? .03 : .05)).toFixed(3)}) /* FILL */`);
   return voices;
 }
 
@@ -48,7 +54,9 @@ export function createStanzaScore(text, variation, beat, semantics = {}, foundat
   const bpm = sections[0]?.analysis.bpm ?? 84;
   if (sections.length < 2) return { text, sections, bpm, code:sections[0]?.code ?? '' };
   sections.forEach((section,index) => {
-    const voices = transitionVoices(section, sections[(index + 1) % sections.length], beat);
+    const next = sections[(index + 1) % sections.length];
+    section.code = createStrudelCode(section.analysis, beat, {foundation:section.foundation, nextFoundation:next.foundation});
+    const voices = transitionVoices(section, next, beat);
     section.code = section.code.slice(0,-2) + ',\n  ' + voices.join(',\n  ') + '\n)';
   });
   const code = `setcpm(${(bpm / 4).toFixed(2)})\narrange(\n` + sections.map((section, index) => {
