@@ -7,6 +7,32 @@ import { addMeaningLinks } from '../src/meaning-links.js';
 import { createArrangement, createStrudelCode } from '../src/music-engine.js';
 import { SemanticClient } from '../src/semantic-client.js';
 
+test('retired workers cannot fail or update a newly enabled worker', async () => {
+  const workers = [], results = [];
+  const client = new SemanticClient({ delay:0, onResult:t => results.push(t), onStatus:() => {},
+    createWorker:() => { const worker = { postMessage() {}, terminate() {} }; workers.push(worker); return worker; } });
+  client.preload();
+  await new Promise(done => setTimeout(done, 10));
+  client.disable(); client.preload();
+  await new Promise(done => setTimeout(done, 10));
+  workers[0].onerror();
+  workers[0].onmessage({ data:{ type:'result', id:client.revision, text:'stale', result:{} } });
+  assert.equal(client.enabled, true);
+  assert.equal(client.worker, workers[1]);
+  assert.deepEqual(results, []);
+  client.disable();
+});
+
+test('worker message failures fall back without an uncaught exception', async () => {
+  const statuses = [];
+  const client = new SemanticClient({ delay:0, onResult:() => {}, onStatus:s => statuses.push(s),
+    createWorker:() => ({ postMessage() { throw new Error('closed'); }, terminate() {} }) });
+  client.preload();
+  await new Promise(done => setTimeout(done, 10));
+  assert.equal(client.enabled, false);
+  assert.equal(statuses.at(-1), 'error');
+});
+
 test('preload prepares an empty editor, then accepts only the latest text', async () => {
   let worker;
   const results = [], statuses = [];

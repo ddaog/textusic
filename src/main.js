@@ -2,6 +2,7 @@ import './styles.css';
 import './reading.css';
 import './code-layout.css';
 import { MusicRecorder } from './music-recorder.js';
+import { readDraft, saveDraft, deferAutomaticSemantics } from './session-safety.js';
 import { SemanticClient } from './semantic-client.js';
 import { addMeaningLinks } from './meaning-links.js';
 import { createModularPatch, patchDescriptions } from './modular-patch.js';
@@ -51,6 +52,9 @@ const elements = {
   },
 };
 
+let draftStorage;
+try { draftStorage = window.sessionStorage; } catch { /* Storage can be denied. */ }
+elements.sentence.value = readDraft(draftStorage);
 const engine = new MusicEngine();
 let recordingUrl;
 const recording = new MusicRecorder((blob, extension) => {
@@ -432,6 +436,7 @@ elements.sentence.addEventListener('focus', () => {
 });
 
 elements.sentence.addEventListener('input', (event) => {
+  saveDraft(draftStorage, elements.sentence.value);
   elements.charCount.textContent = elements.sentence.value.length;
   if (event.isComposing || composing) { renderWordHighlight(); return; }
   analyzeCurrentText();
@@ -586,11 +591,25 @@ window.visualViewport?.addEventListener('resize', syncViewport);
 window.addEventListener('resize', syncViewport);
 syncViewport();
 
-window.addEventListener('pagehide', () => { clearTimeout(semanticStartup); recording.stop(); engine.stop(); semanticClient.disable(); });
+window.addEventListener('pagehide', () => {
+  saveDraft(draftStorage, elements.sentence.value);
+  clearTimeout(semanticStartup);
+  stopPlayback();
+  semanticClient.disable();
+});
+window.addEventListener('pageshow', (event) => {
+  if (!event.persisted) return;
+  // Safari may restore the same JS heap from its back/forward cache.
+  // Synchronize the stopped transport; resume only on the next user action.
+  autoPlayEnabled = true;
+  updatePlaybackStatus();
+  syncViewport();
+});
 
 elements.charCount.textContent = elements.sentence.value.length;
 elements.lexiconStats.textContent = `${LEXICON_STATS.concepts} imagery groups · ${(LEXICON_STATS.korean + LEXICON_STATS.english).toLocaleString()} ko/en words`;
 renderAnalysis();
+if (elements.sentence.value) elements.status.textContent = '작성 중이던 문장을 복원했어요. 문장을 눌러 연주를 이어가세요.';
 
 // Leave the first paint free; inference and model preparation run in a worker.
 const semanticStartup = setTimeout(() => {
@@ -598,6 +617,11 @@ const semanticStartup = setTimeout(() => {
   try { preference = localStorage.getItem('textusic-semantic-auto'); } catch { /* Use default. */ }
   const connection = navigator.connection;
   if (preference === 'false') return;
+  if (deferAutomaticSemantics(navigator)) {
+    document.querySelector('#semantic-summary').textContent = 'AI 단어 해석 · 선택';
+    document.querySelector('#semantic-status').textContent = '안정적인 재생을 위해 AI 해석은 직접 켜주세요';
+    return;
+  }
   if (connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType)) {
     document.querySelector('#semantic-summary').textContent = 'AI 단어 해석 · 다운로드';
     document.querySelector('#semantic-status').textContent = '데이터 절약 중 · 직접 켜서 다운로드';

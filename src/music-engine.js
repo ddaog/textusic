@@ -98,18 +98,26 @@ export class MusicEngine {
     this.initializing = null;
     this.playing = false;
     this.revision = 0;
-    this.module = loadModule();
+    this.loadModule = loadModule;
+    this.module = null;
     this.repl = null;
   }
 
   async init() {
     if (this.ready) return;
     if (!this.initializing) {
+      // Load only inside the handled playback request, and allow a failed
+      // network/initialization attempt to be retried without reloading the page.
+      this.module = Promise.resolve().then(() => this.loadModule());
       this.initializing = this.module
         .then((module) => { this.audioModule = module; return module.initStrudel(); })
         .then((repl) => {
           this.repl = repl;
           this.ready = true;
+        }).catch((error) => {
+          this.initializing = null;
+          this.module = null;
+          throw error;
         });
     }
     await this.initializing;

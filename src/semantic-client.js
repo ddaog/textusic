@@ -22,8 +22,9 @@ export class SemanticClient {
       if (!this.worker) {
         this.onStatus('loading');
         try { this.worker = this.createWorker(); } catch { this.fail(); return; }
+        const worker = this.worker;
         this.worker.onmessage = ({ data }) => {
-          if (!this.enabled) return;
+          if (!this.enabled || this.worker !== worker) return;
           if (data.type === 'status') {
             if (data.status === 'ready') clearTimeout(this.watchdog);
             this.onStatus(data.status, data.progress);
@@ -35,11 +36,12 @@ export class SemanticClient {
             this.onResult(data.text, data.result);
           }
         };
-        this.worker.onerror = () => this.fail();
+        this.worker.onerror = () => { if (this.worker === worker) this.fail(); };
+        this.worker.onmessageerror = () => { if (this.worker === worker) this.fail(); };
       }
       clearTimeout(this.watchdog);
       this.watchdog = setTimeout(() => this.fail(), 180000);
-      this.worker.postMessage({ id, text, tokens });
+      try { this.worker.postMessage({ id, text, tokens }); } catch { this.fail(); }
     }, this.delay);
   }
   invalidate() { this.revision++; clearTimeout(this.timer); clearTimeout(this.watchdog); }

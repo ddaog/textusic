@@ -25,7 +25,7 @@ test('stop during code evaluation cannot restart audio', async () => {
   const { engine, repl } = fixture(() => new Promise((done) => { resolve = done; }));
   await engine.init();
   const pending = engine.play('pending');
-  await Promise.resolve();
+  await new Promise((done) => setImmediate(done));
   engine.stop();
   resolve();
   await pending;
@@ -37,9 +37,35 @@ test('stop during initialization cancels playback', async () => {
   const { repl } = fixture();
   const engine = new MusicEngine(async () => ({ initStrudel: () => new Promise((done) => { resolve = done; }) }));
   const pending = engine.play('pending');
-  await Promise.resolve();
+  await new Promise((done) => setImmediate(done));
   engine.stop();
   resolve(repl);
   await pending;
   assert.equal(repl.scheduler.started, false);
+});
+
+test('music import is lazy and a failed import can be retried', async () => {
+  const { repl } = fixture();
+  let attempts = 0;
+  const engine = new MusicEngine(async () => {
+    if (++attempts === 1) throw new Error('network unavailable');
+    return { initStrudel: async () => repl };
+  });
+  assert.equal(attempts, 0);
+  await assert.rejects(engine.play('first'), /network unavailable/);
+  await engine.play('retry');
+  assert.equal(attempts, 2);
+  assert.equal(engine.playing, true);
+});
+
+test('failed Strudel initialization does not poison subsequent playback', async () => {
+  const { repl } = fixture();
+  let attempts = 0;
+  const engine = new MusicEngine(async () => ({ initStrudel: async () => {
+    if (++attempts === 1) throw new Error('audio unavailable');
+    return repl;
+  } }));
+  await assert.rejects(engine.play('first'), /audio unavailable/);
+  await engine.play('retry');
+  assert.equal(engine.playing, true);
 });
