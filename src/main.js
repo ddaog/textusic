@@ -2,6 +2,7 @@ import './styles.css';
 import './reading.css';
 import './code-layout.css';
 import { MusicRecorder } from './music-recorder.js';
+import { TypingSound } from './typing-sound.js';
 import { VideoRecorder } from './video-recorder.js';
 import { AudioSpectrum } from './audio-spectrum.js';
 import { createStanzaScore, stanzaPosition, visiblePlayingSection } from './stanzas.js';
@@ -69,6 +70,9 @@ let draftStorage;
 try { draftStorage = window.sessionStorage; } catch { /* Storage can be denied. */ }
 elements.sentence.value = readDraft(draftStorage);
 const engine = new MusicEngine();
+const typingSound = new TypingSound();
+let captureStarting = false;
+let typingCapture = false;
 let videoScene;
 let recordingUrl;
 const recording = new MusicRecorder((blob, extension) => {
@@ -80,9 +84,13 @@ const recording = new MusicRecorder((blob, extension) => {
   link.hidden = false;
   document.querySelector('#record-status').textContent = '녹음 완료 · 파일 저장을 눌러주세요';
   document.querySelector('#record-button').textContent = '● 음악 녹음';
+  videoButton.disabled = false;
+  document.querySelector('#typing-record-button').disabled = false;
 }, (status) => {
   document.querySelector('#record-status').textContent = status;
   document.querySelector('#record-button').textContent = recording.active ? '■ 녹음 끝내기' : '● 음악 녹음';
+  videoButton.disabled = !!recording.recorder;
+  document.querySelector('#typing-record-button').disabled = !!recording.recorder;
 });
 const spectrum = new AudioSpectrum();
 let videoUrl;
@@ -104,12 +112,17 @@ const videoRecording = new VideoRecorder((blob, extension) => {
   updateVideoStatus('영상 완성 · 미리보기 후 공유하거나 저장하세요');
 }, updateVideoStatus);
 function updateVideoStatus(status) {
+  if (!videoRecording.busy) { typingCapture = false; typingSound.stop(); }
   videoStatus.textContent = status;
   videoButton.textContent = videoRecording.active ? '■ 영상 끝내기' : '○ 영상 저장';
   videoButton.disabled = videoRecording.busy && !videoRecording.active;
   document.querySelector('#record-button').disabled = videoRecording.busy;
+  const typingButton = document.querySelector('#typing-record-button');
+  typingButton.textContent = typingCapture && videoRecording.active ? '■ 타이핑 녹화 끝내기' : '⌨ 타이핑 녹화';
+  typingButton.disabled = videoRecording.busy && !typingCapture;
 }
 engine.onOutput = (output) => {
+  typingSound.connect(engine.audioModule.getAudioContext(), output);
   recording.connect(output);
   videoRecording.connect(output);
   try { spectrum.connect(output); } catch { /* Visualization must never interrupt music. */ }
@@ -530,12 +543,14 @@ function stopPlayback(message = '연주를 멈췄어요. 문장을 바꾸거나 
   spectrum.setActive(false);
   recording.stop();
   videoRecording.stop();
+  typingSound.stop();
   visualizer.setPlaying(false);
   updatePlaybackStatus();
   elements.status.textContent = message;
 }
 
 async function applyLatestAudio() {
+  if (captureStarting) return;
   if (!elements.sentence.value.trim()) return;
   if (audioTask) return audioTask;
   const revision = audioRevision;
@@ -577,6 +592,7 @@ async function applyLatestAudio() {
 }
 
 async function playCurrent() {
+  if (captureStarting) return;
   if (!elements.sentence.value.trim()) { elements.sentence.focus(); return; }
   if (engine.playing || audioTask) {
     stopPlayback();
@@ -605,6 +621,7 @@ elements.sentence.addEventListener('focus', () => {
 });
 
 elements.sentence.addEventListener('input', (event) => {
+  typingSound.input(elements.sentence.value, engine.score?.sections?.[stanzaPosition(engine.repl?.scheduler.now() ?? 0, engine.score?.sections?.length || 1).index]?.analysis.root ?? analysis.root, typingCapture && videoRecording.active);
   lastInputAt = performance.now();
   saveDraft(draftStorage, elements.sentence.value);
   elements.charCount.textContent = elements.sentence.value.length;
@@ -612,6 +629,12 @@ elements.sentence.addEventListener('input', (event) => {
   analyzeCurrentText();
   if (!elements.sentence.value.trim()) {
     window.clearTimeout(updateTimer);
+    if (typingCapture && videoRecording.active) {
+      audioRevision += 1;
+      engine.stop(); typingSound.stop(); visualizer.setPlaying(false); updatePlaybackStatus();
+      autoPlayEnabled = true;
+      return;
+    }
     stopPlayback('문장을 입력하세요.');
     autoPlayEnabled = true;
     return;
@@ -668,46 +691,82 @@ document.querySelector('#beat-mode').addEventListener('change', (event) => {
   if (engine.playing) applyLatestAudio();
 });
 
-document.querySelector('#record-button').addEventListener('click', async (event) => {
-  if (videoRecording.busy) return;
-  if (recording.active) { recording.stop(); return; }
-  if (!elements.sentence.value.trim()) { elements.sentence.focus(); document.querySelector('#record-status').textContent = '먼저 문장을 입력해주세요'; return; }
-  event.currentTarget.disabled = true;
+function recordedContent() {
+  const score = engine.score;
+  return { text: elements.sentence.value,
+    scene: videoScene?.text === elements.sentence.value ? videoScene : undefined,
+    active: visiblePlayingSection(elements.sentence.value, score, engine.repl?.scheduler.now() ?? 0),
+    energy: Math.pow(Math.max(0, ...spectrum.levels), 1.5),
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches };
+}
+
+async function beginCapture(kind, typing = false) {
+  if (captureStarting) return;
+  const recorder = kind === 'audio' ? recording : videoRecording;
+  if (recorder.active) { recorder.stop(); typingSound.stop(); return; }
+  if (recording.recorder || videoRecording.busy) return;
+  if (!typing && !elements.sentence.value.trim()) {
+    elements.sentence.focus();
+    (kind === 'audio' ? document.querySelector('#record-status') : videoStatus).textContent = '먼저 문장을 입력해주세요.';
+    return;
+  }
+  captureStarting = true;
+  const controls = ['#record-button', '#video-record-button', '#typing-record-button', '#play-button'];
+  controls.forEach(id => document.querySelector(id).disabled = true);
+  elements.sentence.disabled = true;
+  videoPreview.pause();
+  window.clearTimeout(updateTimer);
+  autoPlayEnabled = false;
+  audioRevision += 1;
+  engine.stop();
+  typingSound.stop();
+  visualizer.setPlaying(false);
   try {
+    // Finish/cancel older evaluations before preparing a clean cycle-zero score.
     if (audioTask) await audioTask;
-    if (!engine.playing) await playCurrent();
-    if (!engine.playing) throw new Error('재생을 시작한 뒤 녹음해주세요.');
-    const module = await engine.module;
-    recording.start(module.getAudioContext(), module.getSuperdoughAudioController().output.destinationGain);
-    document.querySelector('#record-save').hidden = true;
-  } catch (error) { document.querySelector('#record-status').textContent = error.message; }
-  finally { document.querySelector('#record-button').disabled = false; }
-});
-videoButton.addEventListener('click', async () => {
-  if (videoRecording.active) { videoRecording.stop(); return; }
-  if (videoRecording.busy) return;
-  if (recording.recorder) { videoStatus.textContent = '음악 녹음을 끝낸 뒤 영상 저장을 시작해주세요.'; return; }
-  if (!elements.sentence.value.trim()) { elements.sentence.focus(); videoStatus.textContent = '먼저 문장을 입력해주세요.'; return; }
-  if (!engine.playing) { videoStatus.textContent = '재생 버튼으로 음악을 시작한 뒤 영상 저장을 눌러주세요.'; return; }
-  videoButton.disabled = true;
-  document.querySelector('#record-button').disabled = true;
-  try {
-    videoPreview.pause();
-    if (!engine.playing || document.hidden) throw new Error('화면을 열고 음악을 재생한 뒤 다시 시도해주세요.');
-    const module = await engine.module;
-    videoRecording.start(module.getAudioContext(), module.getSuperdoughAudioController().output.destinationGain,
-      document.querySelector('#visualizer'), () => {
-        const score = engine.score;
-        return { text: elements.sentence.value,
-          scene: videoScene?.text === elements.sentence.value ? videoScene : undefined,
-          active: visiblePlayingSection(elements.sentence.value, score, engine.repl?.scheduler.now() ?? 0),
-          energy: Math.pow(Math.max(0, ...spectrum.levels), 1.5),
-          reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches };
-      });
-    document.querySelector('#video-result').hidden = true;
-  } catch (error) { updateVideoStatus(error.message); }
-  finally { videoButton.disabled = videoRecording.busy && !videoRecording.active; document.querySelector('#record-button').disabled = videoRecording.busy; }
-});
+    engine.stop();
+    await engine.init();
+    const module = engine.audioModule;
+    await module.getAudioContext().resume();
+    if (document.hidden) throw new Error('화면을 열어둔 상태에서 다시 시작해주세요.');
+    analyzeCurrentText({ keepVariation: true });
+    typingCapture = typing;
+    typingSound.text = elements.sentence.value;
+    const captureCode = elements.sentence.value.trim() ? code : 'silence';
+    await engine.play(captureCode, { score: stanzaScore, beforeStart: async () => {
+      if (document.hidden) throw new Error('화면이 숨겨져 녹화를 취소했어요.');
+      const context = module.getAudioContext();
+      const output = module.getSuperdoughAudioController().output.destinationGain;
+      if (kind === 'audio') recording.start(context, output);
+      else videoRecording.start(context, output, document.querySelector('#visualizer'), recordedContent);
+      if (!await recorder.ready) throw new Error('녹음 준비가 완료되지 않았어요. 다시 시도해주세요.');
+      if (document.hidden || !recorder.active) throw new Error('녹화가 중단되었어요.');
+    } });
+    if (!engine.playing) throw new Error('연주 시작이 취소되었어요.');
+    autoPlayEnabled = true;
+    visualizer.setPlaying(true);
+    spectrum.setActive(true);
+    document.querySelector(kind === 'audio' ? '#record-save' : '#video-result').hidden = true;
+    elements.status.textContent = typing ? '쓰는 과정과 작은 키 소리를 함께 담고 있어요.' : '첫 마디부터 녹음하고 있어요.';
+  } catch (error) {
+    recorder.stop();
+    engine.stop(); typingSound.stop(); typingCapture = false;
+    (kind === 'audio' ? document.querySelector('#record-status') : videoStatus).textContent = error.message;
+  } finally {
+    captureStarting = false;
+    elements.sentence.disabled = false;
+    controls.forEach(id => document.querySelector(id).disabled = false);
+    document.querySelector('#record-button').disabled = videoRecording.busy;
+    videoButton.disabled = !!recording.recorder;
+    document.querySelector('#typing-record-button').disabled = !!recording.recorder || (videoRecording.busy && !typingCapture);
+    updatePlaybackStatus();
+    if (typingCapture && videoRecording.active) elements.sentence.focus({ preventScroll: true });
+  }
+}
+
+document.querySelector('#record-button').addEventListener('click', () => beginCapture('audio'));
+videoButton.addEventListener('click', () => beginCapture('video'));
+document.querySelector('#typing-record-button').addEventListener('click', () => beginCapture('video', true));
 window.addEventListener('formyiru:cycle', () => videoRecording.frame(performance.now()));
 videoShare.addEventListener('click', async () => {
   if (!videoFile) return;

@@ -157,7 +157,7 @@ export class MusicEngine {
     await this.initializing;
   }
 
-  async play(code, { semantic = false, score } = {}) {
+  async play(code, { semantic = false, score, beforeStart } = {}) {
     configurePlaybackSession();
     const revision = ++this.revision;
     await this.init();
@@ -175,7 +175,12 @@ export class MusicEngine {
     if (this.onOutput) this.onOutput(this.audioModule.getSuperdoughAudioController().output.destinationGain);
     if (revision !== this.revision) return;
     if (this.repl.state?.evalError) throw this.repl.state.evalError;
-    if (!this.repl.scheduler.started) await this.repl.start();
+    this.score = score;
+    if (!this.repl.scheduler.started) {
+      await beforeStart?.();
+      if (revision !== this.revision) return;
+      await this.repl.start();
+    }
     if (revision !== this.revision) { this.repl.stop(); return; }
     this.playing = true;
     this.lastCode = code;

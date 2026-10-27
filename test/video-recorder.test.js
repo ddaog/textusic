@@ -59,6 +59,15 @@ test('unsupported recorder fails before allocating capture resources', () => {
   const f = fixture(); f.recorder.Recorder = undefined;
   assert.throws(() => f.start(), /지원하지/); assert.equal(f.recorder.busy, false);
 });
+test('recorder readiness resolves only on start, and cleanup cancels pending readiness', async () => {
+  const f = fixture(); f.start();
+  f.recorder.recorder.onstart();
+  assert.equal(await f.recorder.ready, true);
+  f.recorder.stop(); f.recorder.recorder.finish();
+  f.start(); const pending = f.recorder.ready;
+  f.recorder.stop(); f.recorder.recorder.finish();
+  assert.equal(await pending, false);
+});
 test('poem wrapping preserves line breaks and Korean characters', () => {
   assert.deepEqual(wrapPoem({ measureText: s => ({ width: [...s].length }) }, '가나다\n라', 2), ['가나', '다', '라']);
 });

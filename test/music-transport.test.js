@@ -10,6 +10,24 @@ function fixture(evaluate = async () => {}) {
   };
   return { repl, engine: new MusicEngine(async () => ({ initStrudel: async () => repl })) };
 }
+test('recording readiness precedes transport start and exposes the new score', async () => {
+  const { engine, repl } = fixture();
+  const score = { sections: ['first'] };
+  let ready = false;
+  await engine.play('record', { score, beforeStart: async () => {
+    assert.equal(repl.scheduler.started, false);
+    assert.equal(engine.score, score);
+    ready = true;
+  } });
+  assert.ok(ready && engine.playing);
+});
+test('cancel or failed recording preparation never starts transport', async () => {
+  const { engine, repl } = fixture();
+  await engine.play('cancel', { beforeStart: async () => engine.stop() });
+  assert.equal(repl.scheduler.started, false);
+  await assert.rejects(engine.play('failure', { beforeStart: async () => { throw new Error('encoder'); } }), /encoder/);
+  assert.equal(repl.scheduler.started, false);
+});
 test('stop controls the owned transport, not the overwritten global hush', async () => {
   const { engine, repl } = fixture();
   await engine.play('test');

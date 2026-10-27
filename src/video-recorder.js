@@ -106,6 +106,11 @@ export class VideoRecorder {
         if (!failed && blob.size) this.onSaved(blob, type.includes('mp4') ? 'mp4' : 'webm');
         else if (!failed) this.onStatus('저장된 영상이 없어요. 재생 후 다시 시도해주세요.');
       };
+      this.ready = new Promise((resolve) => {
+        this.settleReady = resolve;
+        this.readyTimer = setTimeout(() => resolve(false), 5000);
+        recorder.onstart = () => { clearTimeout(this.readyTimer); resolve(true); };
+      });
       recorder.start(1000);
       this.started = performance.now(); this.lastFrame = -Infinity; this.lastSecond = -1;
       this.limit = setTimeout(() => this.stop(), 60000);
@@ -121,11 +126,14 @@ export class VideoRecorder {
     if (second !== this.lastSecond) { this.lastSecond = second; this.onStatus(`영상 녹화 중 · ${second} / 60초`); }
   }
   stop() {
+    this.settleReady?.(false);
     if (!this.active) return;
     this.recorder.stop(); clearTimeout(this.limit);
     this.onStatus('영상 저장 준비 중…');
   }
   cleanup() {
+    this.settleReady?.(false);
+    clearTimeout(this.readyTimer);
     clearTimeout(this.limit);
     try { this.output?.disconnect(this.destination); } catch { /* Only disconnect our recording branch. */ }
     this.videoStream?.getTracks().forEach((track) => track.stop());
