@@ -55,7 +55,7 @@ export class TypingSound {
     overtone.frequency.value = tone.frequency.value * 2;
     const toneGain = this.context.createGain(); toneGain.gain.value = .06 + (1 - softness) * .08 + accent * .12;
     tone.connect(gain); overtone.connect(toneGain); toneGain.connect(gain); gain.connect(this.output);
-    const level = (.012 + accent * .024) * (text.length < previousText.length ? .7 : 1) / Math.sqrt(1 + this.voices.size * .3);
+    const level = 1.15 * (.012 + accent * .024) * (text.length < previousText.length ? .7 : 1) / Math.sqrt(1 + this.voices.size * .3);
     gain.gain.setValueAtTime(0, now);
     gain.gain.linearRampToValueAtTime(level, now + .012 + softness * .012);
     gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
