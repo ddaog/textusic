@@ -59,6 +59,19 @@ test('unsupported recorder fails before allocating capture resources', () => {
   const f = fixture(); f.recorder.Recorder = undefined;
   assert.throws(() => f.start(), /지원하지/); assert.equal(f.recorder.busy, false);
 });
+test('video retains encoder and audio track while text is cleared and retyped', () => {
+  const f = fixture(); f.start();
+  const native = f.recorder.recorder;
+  for (const text of ['달빛', '', '   ', '바람', '바람이 분다.\n\n빛이 온다.']) {
+    f.recorder.getContent = () => ({ text });
+    f.recorder.frame((f.recorder.lastFrame === -Infinity ? 0 : f.recorder.lastFrame) + 100);
+    assert.equal(f.recorder.recorder, native);
+    assert.equal(f.recorder.active, true);
+    assert.ok(f.tracks.every(t => !t.stopped));
+  }
+  f.recorder.stop(); native.finish();
+  assert.equal(f.saved.length, 1);
+});
 test('recorder readiness resolves only on start, and cleanup cancels pending readiness', async () => {
   const f = fixture(); f.start();
   f.recorder.recorder.onstart();

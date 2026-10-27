@@ -676,7 +676,8 @@ elements.sentence.addEventListener('input', (event) => {
   analyzeCurrentText();
   if (!elements.sentence.value.trim()) {
     window.clearTimeout(updateTimer);
-    if (typingCapture && videoRecording.active) {
+    // Both video modes keep the same encoder/tracks alive through an empty draft.
+    if (videoRecording.active) {
       audioRevision += 1;
       engine.stop(); typingSound.stop(); visualizer.setPlaying(false); updatePlaybackStatus();
       autoPlayEnabled = true;
