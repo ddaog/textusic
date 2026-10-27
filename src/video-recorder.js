@@ -79,7 +79,7 @@ export class VideoRecorder {
   start(context, output, source, getContent) {
     if (this.busy) throw new Error('이전 영상을 저장하는 중이에요.');
     const mimeType = VIDEO_TYPES.find((type) => this.Recorder?.isTypeSupported(type));
-    if (!mimeType) throw new Error('이 브라우저는 영상 저장을 지원하지 않아요. 음악 녹음을 이용해주세요.');
+    if (!mimeType) throw new Error('이 브라우저는 영상 녹화를 지원하지 않아요. 다른 브라우저에서 시도해주세요.');
     try {
       this.canvas = this.createCanvas(); this.canvas.width = 540; this.canvas.height = 960;
       if (!this.canvas.captureStream) throw new Error('이 브라우저는 시각화 녹화를 지원하지 않아요.');
@@ -97,7 +97,7 @@ export class VideoRecorder {
         if (data.size) { chunks.push(data); bytes += data.size; }
         if (bytes >= 16 * 1024 * 1024) this.stop();
       };
-      recorder.onerror = () => { failed = true; this.stop(); this.cleanup(); this.onStatus('영상 저장에 실패했어요. 음악 녹음을 이용해주세요.'); };
+      recorder.onerror = () => { failed = true; this.stop(); this.cleanup(); this.onStatus('영상 저장에 실패했어요. 다시 시도해주세요.'); };
       recorder.onstop = () => {
         if (this.recorder !== recorder) return;
         const type = recorder.mimeType || mimeType;

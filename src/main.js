@@ -1,7 +1,6 @@
 import './styles.css';
 import './reading.css';
 import './code-layout.css';
-import { MusicRecorder } from './music-recorder.js';
 import { TypingSound } from './typing-sound.js';
 import { VideoRecorder } from './video-recorder.js';
 import { AudioSpectrum } from './audio-spectrum.js';
@@ -107,24 +106,6 @@ for (const event of ['focus', 'pointerup', 'keydown']) elements.sentence.addEven
 let captureStarting = false;
 let typingCapture = false;
 let videoScene;
-let recordingUrl;
-const recording = new MusicRecorder((blob, extension) => {
-  if (recordingUrl) URL.revokeObjectURL(recordingUrl);
-  recordingUrl = URL.createObjectURL(blob);
-  const link = document.querySelector('#record-save');
-  link.href = recordingUrl;
-  link.download = `textusic-${Date.now()}.${extension}`;
-  link.hidden = false;
-  document.querySelector('#record-status').textContent = '녹음 완료 · 파일 저장을 눌러주세요';
-  document.querySelector('#record-button').textContent = '● 음악 녹음';
-  videoButton.disabled = false;
-  document.querySelector('#typing-record-button').disabled = false;
-}, (status) => {
-  document.querySelector('#record-status').textContent = status;
-  document.querySelector('#record-button').textContent = recording.active ? '■ 녹음 끝내기' : '● 음악 녹음';
-  videoButton.disabled = !!recording.recorder;
-  document.querySelector('#typing-record-button').disabled = !!recording.recorder;
-});
 const spectrum = new AudioSpectrum();
 let videoUrl;
 let videoFile;
@@ -147,16 +128,14 @@ const videoRecording = new VideoRecorder((blob, extension) => {
 function updateVideoStatus(status) {
   if (!videoRecording.busy) { typingCapture = false; typingSound.stop(); }
   videoStatus.textContent = status;
-  videoButton.textContent = videoRecording.active ? '■ 영상 끝내기' : '○ 영상 저장';
+  videoButton.textContent = videoRecording.active ? '영상 녹화 끝내기' : '영상 녹화';
   videoButton.disabled = videoRecording.busy && !videoRecording.active;
-  document.querySelector('#record-button').disabled = videoRecording.busy;
   const typingButton = document.querySelector('#typing-record-button');
-  typingButton.textContent = typingCapture && videoRecording.active ? '■ 타이핑 녹화 끝내기' : '⌨ 타이핑 녹화';
+  typingButton.textContent = typingCapture && videoRecording.active ? '타이핑 녹화 끝내기' : '타이핑 녹화';
   typingButton.disabled = videoRecording.busy && !typingCapture;
 }
 engine.onOutput = (output) => {
   typingSound.connect(engine.audioModule.getAudioContext(), output);
-  recording.connect(output);
   videoRecording.connect(output);
   try { spectrum.connect(output); } catch { /* Visualization must never interrupt music. */ }
 };
@@ -574,7 +553,6 @@ function stopPlayback(message = '연주를 멈췄어요. 문장을 바꾸거나 
   audioRevision += 1;
   engine.stop();
   spectrum.setActive(false);
-  recording.stop();
   videoRecording.stop();
   typingSound.stop();
   visualizer.setPlaying(false);
@@ -662,7 +640,7 @@ function currentTypingHarmony() {
   const source = section?.foundation ?? musicFoundation ?? analysis;
   let arrangement = typingArrangements.get(source);
   if (!arrangement) { arrangement = createArrangement(source); typingArrangements.set(source, arrangement); }
-  return { root: source.root, scale: arrangement.scale, chord: arrangement.chords[position.bar - 1],
+  return { cycle, playing: engine.playing, root: source.root, scale: arrangement.scale, chord: arrangement.chords[position.bar - 1],
     bpm: score?.bpm ?? arrangement.bpm, softness: section?.analysis.axes.softness ?? source.axes.softness };
 }
 
@@ -748,18 +726,18 @@ function recordedContent() {
     reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches };
 }
 
-async function beginCapture(kind, typing = false) {
+async function beginCapture(typing = false) {
   if (captureStarting) return;
-  const recorder = kind === 'audio' ? recording : videoRecording;
+  const recorder = videoRecording;
   if (recorder.active) { recorder.stop(); typingSound.stop(); return; }
-  if (recording.recorder || videoRecording.busy) return;
+  if (videoRecording.busy) return;
   if (!typing && !elements.sentence.value.trim()) {
     elements.sentence.focus();
-    (kind === 'audio' ? document.querySelector('#record-status') : videoStatus).textContent = '먼저 문장을 입력해주세요.';
+    videoStatus.textContent = '먼저 문장을 입력해주세요.';
     return;
   }
   captureStarting = true;
-  const controls = ['#record-button', '#video-record-button', '#typing-record-button', '#play-button'];
+  const controls = ['#video-record-button', '#typing-record-button', '#play-button'];
   controls.forEach(id => document.querySelector(id).disabled = true);
   elements.sentence.disabled = true;
   videoPreview.pause();
@@ -785,8 +763,7 @@ async function beginCapture(kind, typing = false) {
       if (document.hidden) throw new Error('화면이 숨겨져 녹화를 취소했어요.');
       const context = module.getAudioContext();
       const output = module.getSuperdoughAudioController().output.destinationGain;
-      if (kind === 'audio') recording.start(context, output);
-      else videoRecording.start(context, output, document.querySelector('#visualizer'), recordedContent);
+      videoRecording.start(context, output, document.querySelector('#visualizer'), recordedContent);
       if (!await recorder.ready) throw new Error('녹음 준비가 완료되지 않았어요. 다시 시도해주세요.');
       if (document.hidden || !recorder.active) throw new Error('녹화가 중단되었어요.');
     } });
@@ -794,27 +771,25 @@ async function beginCapture(kind, typing = false) {
     autoPlayEnabled = true;
     visualizer.setPlaying(true);
     spectrum.setActive(true);
-    document.querySelector(kind === 'audio' ? '#record-save' : '#video-result').hidden = true;
+    document.querySelector('#video-result').hidden = true;
     elements.status.textContent = typing ? '쓰는 과정과 작은 키 소리를 함께 담고 있어요.' : '첫 마디부터 녹음하고 있어요.';
   } catch (error) {
     recorder.stop();
     engine.stop(); typingSound.stop(); typingCapture = false;
-    (kind === 'audio' ? document.querySelector('#record-status') : videoStatus).textContent = error.message;
+    videoStatus.textContent = error.message;
   } finally {
     captureStarting = false;
     elements.sentence.disabled = false;
     controls.forEach(id => document.querySelector(id).disabled = false);
-    document.querySelector('#record-button').disabled = videoRecording.busy;
-    videoButton.disabled = !!recording.recorder;
-    document.querySelector('#typing-record-button').disabled = !!recording.recorder || (videoRecording.busy && !typingCapture);
+    videoButton.disabled = videoRecording.busy && !videoRecording.active;
+    document.querySelector('#typing-record-button').disabled = videoRecording.busy && !typingCapture;
     updatePlaybackStatus();
     if (typingCapture && videoRecording.active) elements.sentence.focus({ preventScroll: true });
   }
 }
 
-document.querySelector('#record-button').addEventListener('click', () => beginCapture('audio'));
-videoButton.addEventListener('click', () => beginCapture('video'));
-document.querySelector('#typing-record-button').addEventListener('click', () => beginCapture('video', true));
+videoButton.addEventListener('click', () => beginCapture());
+document.querySelector('#typing-record-button').addEventListener('click', () => beginCapture(true));
 window.addEventListener('formyiru:cycle', () => videoRecording.frame(performance.now()));
 videoShare.addEventListener('click', async () => {
   if (!videoFile) return;
@@ -822,7 +797,7 @@ videoShare.addEventListener('click', async () => {
   catch (error) { if (error.name !== 'AbortError') videoStatus.textContent = '공유하지 못했어요. 영상 파일 저장을 이용해주세요.'; }
 });
 videoPreview.addEventListener('play', () => { if (engine.playing) stopPlayback('저장한 영상을 미리 보고 있어요.'); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { recording.stop(); videoRecording.stop(); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { videoRecording.stop(); } });
 
 function setSemanticEnabled(enabled) {
   clearTimeout(semanticStartup);
