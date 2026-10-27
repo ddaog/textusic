@@ -653,9 +653,22 @@ elements.sentence.addEventListener('focus', () => {
   if (elements.sentence.value.trim() && autoPlayEnabled && !engine.playing && !audioTask) playCurrent();
 });
 
+const typingArrangements = new WeakMap();
+function currentTypingHarmony() {
+  const cycle = engine.playing ? engine.repl.scheduler.now() : 0;
+  const score = engine.playing ? engine.score : stanzaScore;
+  const position = stanzaPosition(cycle, score?.sections?.length || 1);
+  const section = score?.sections?.[position.index];
+  const source = section?.foundation ?? musicFoundation ?? analysis;
+  let arrangement = typingArrangements.get(source);
+  if (!arrangement) { arrangement = createArrangement(source); typingArrangements.set(source, arrangement); }
+  return { root: source.root, scale: arrangement.scale, chord: arrangement.chords[position.bar - 1],
+    bpm: score?.bpm ?? arrangement.bpm, softness: section?.analysis.axes.softness ?? source.axes.softness };
+}
+
 elements.sentence.addEventListener('input', (event) => {
   prepareTypingSound();
-  typingSound.input(elements.sentence.value, engine.score?.sections?.[stanzaPosition(engine.repl?.scheduler.now() ?? 0, engine.score?.sections?.length || 1).index]?.analysis.root ?? analysis.root, typingSoundToggle.checked && !document.hidden && !captureStarting);
+  typingSound.input(elements.sentence.value, currentTypingHarmony(), typingSoundToggle.checked && !document.hidden && !captureStarting);
   lastInputAt = performance.now();
   saveDraft(draftStorage, elements.sentence.value);
   elements.charCount.textContent = elements.sentence.value.length;
