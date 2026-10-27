@@ -16,15 +16,15 @@ export function wrapPoem(ctx, text, width) {
 }
 
 export function fitVideoPoem(ctx, text, width = 468, height = 290, fontFamily = 'serif') {
-  let low = 0.25, high = 30;
+  let low = 0.05, high = 30;
   // Keep every line (including blank stanza separators); never crop or ellipsize.
-  for (let step = 0; step < 8; step++) {
+  for (let step = 0; step < 12; step++) {
     const size = (low + high) / 2;
     ctx.font = `${size}px ${fontFamily}`;
     if (wrapPoem(ctx, text, width).length * size * 1.45 <= height) low = size;
     else high = size;
   }
-  const size = Math.floor(low * 4) / 4;
+  const size = Math.floor(low * 100) / 100;
   ctx.font = `${size}px ${fontFamily}`;
   return { size, lines: wrapPoem(ctx, text, width) };
 }

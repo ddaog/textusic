@@ -17,12 +17,12 @@ export function markSemanticPreparation(storage, preparing, now = Date.now()) {
 }
 
 export function readDraft(storage) {
-  try { return (storage.getItem(DRAFT_KEY) ?? '').slice(0, 180); } catch { return ''; }
+  try { return (storage.getItem(DRAFT_KEY) ?? '').slice(0, 2000); } catch { return ''; }
 }
 
 export function saveDraft(storage, text) {
   try {
-    if (text) storage.setItem(DRAFT_KEY, text.slice(0, 180));
+    if (text) storage.setItem(DRAFT_KEY, text.slice(0, 2000));
     else storage.removeItem(DRAFT_KEY);
   } catch { /* Private browsing or full storage must never interrupt typing. */ }
 }

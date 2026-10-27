@@ -63,9 +63,9 @@ test('poem wrapping preserves line breaks and Korean characters', () => {
   assert.deepEqual(wrapPoem({ measureText: s => ({ width: [...s].length }) }, '가나다\n라', 2), ['가나', '다', '라']);
 });
 
-test('all 180 characters fit without truncation, including many explicit line breaks', () => {
+test('all 2000 characters fit without truncation, including many explicit line breaks', () => {
   const ctx = { font: '', measureText(text) { return { width: [...text].length * parseFloat(this.font) }; } };
-  for (const text of ['가'.repeat(180), '바람과 빛\n\n'.repeat(22).slice(0, 180), '가\n'.repeat(90)]) {
+  for (const text of ['가'.repeat(2000), '바람과 빛\n\n'.repeat(300).slice(0, 2000), '가\n'.repeat(1000), '\n'.repeat(2000)]) {
     const { size, lines } = fitVideoPoem(ctx, text);
     assert.equal(lines.join(''), text.replaceAll('\n', ''));
     assert.ok(lines.length * size * 1.45 <= 290);

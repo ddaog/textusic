@@ -7,8 +7,10 @@ test('draft survives reload and clearing input removes it', () => {
   const storage = { getItem:key => values.get(key), setItem:(key,value) => values.set(key,value), removeItem:key => values.delete(key) };
   saveDraft(storage, '바다가 흐른다');
   assert.equal(readDraft(storage), '바다가 흐른다');
-  saveDraft(storage, 'a'.repeat(300));
-  assert.equal(readDraft(storage).length, 180);
+  saveDraft(storage, '가'.repeat(2000));
+  assert.equal(readDraft(storage), '가'.repeat(2000));
+  saveDraft(storage, 'a'.repeat(2100));
+  assert.equal(readDraft(storage).length, 2000);
   saveDraft(storage, '');
   assert.equal(readDraft(storage), '');
   assert.doesNotThrow(() => saveDraft(undefined, 'hello'));
