@@ -71,6 +71,39 @@ try { draftStorage = window.sessionStorage; } catch { /* Storage can be denied. 
 elements.sentence.value = readDraft(draftStorage);
 const engine = new MusicEngine();
 const typingSound = new TypingSound();
+const typingSoundToggle = document.querySelector('#typing-sound-enabled');
+try { typingSoundToggle.checked = localStorage.getItem('poets-typing-sound') !== 'off'; } catch { /* Private mode. */ }
+let typingPreparation = null;
+function prepareTypingSound() {
+  if (!typingSoundToggle.checked || document.hidden) return;
+  if (engine.ready) {
+    // Resume inside the fresh gesture, even if an earlier Safari resume is pending.
+    try {
+      const module = engine.audioModule;
+      const context = module.getAudioContext();
+      typingSound.connect(context, module.getSuperdoughAudioController().output.destinationGain);
+      if (context.state !== 'running') context.resume().catch(() => {});
+    } catch { /* Audio is optional; keep the editor usable. */ }
+    return;
+  }
+  if (typingPreparation) return typingPreparation;
+  // Share Strudel's context/output; never start the transport just for key sounds.
+  typingPreparation = (async () => {
+    await engine.init();
+    const module = engine.audioModule;
+    const context = module.getAudioContext();
+    typingSound.connect(context, module.getSuperdoughAudioController().output.destinationGain);
+    if (context.state !== 'running') await context.resume();
+  })().catch(() => { /* Optional texture must not block typing or music. Retry on the next gesture. */ })
+    .finally(() => { typingPreparation = null; });
+  return typingPreparation;
+}
+typingSoundToggle.addEventListener('change', () => {
+  try { localStorage.setItem('poets-typing-sound', typingSoundToggle.checked ? 'on' : 'off'); } catch { /* Private mode. */ }
+  if (typingSoundToggle.checked) prepareTypingSound();
+  else typingSound.stop();
+});
+for (const event of ['focus', 'pointerup', 'keydown']) elements.sentence.addEventListener(event, prepareTypingSound);
 let captureStarting = false;
 let typingCapture = false;
 let videoScene;
@@ -621,7 +654,8 @@ elements.sentence.addEventListener('focus', () => {
 });
 
 elements.sentence.addEventListener('input', (event) => {
-  typingSound.input(elements.sentence.value, engine.score?.sections?.[stanzaPosition(engine.repl?.scheduler.now() ?? 0, engine.score?.sections?.length || 1).index]?.analysis.root ?? analysis.root, typingCapture && videoRecording.active);
+  prepareTypingSound();
+  typingSound.input(elements.sentence.value, engine.score?.sections?.[stanzaPosition(engine.repl?.scheduler.now() ?? 0, engine.score?.sections?.length || 1).index]?.analysis.root ?? analysis.root, typingSoundToggle.checked && !document.hidden && !captureStarting);
   lastInputAt = performance.now();
   saveDraft(draftStorage, elements.sentence.value);
   elements.charCount.textContent = elements.sentence.value.length;

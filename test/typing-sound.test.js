@@ -13,7 +13,7 @@ function context() {
     createBuffer: (channels, length) => ({ getChannelData: () => new Float32Array(length) }),
     createGain: node, createBufferSource: node, createOscillator: node };
 }
-test('typing stays silent outside capture and bounds paste, duplicate IME events and voices', () => {
+test('typing toggle silences input and bounds paste, duplicate IME events and voices', () => {
   const sound = new TypingSound(), ctx = context(); sound.connect(ctx, {});
   sound.input('가', 'C', false); assert.equal(sound.voices.size, 0);
   sound.input('가나', 'C', true); assert.equal(sound.voices.size, 1);
