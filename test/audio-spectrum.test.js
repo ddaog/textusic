@@ -40,3 +40,11 @@ test('actual input controls levels with slower decay and replaced output detache
   const other={...f.output,connect(){}}; f.spectrum.connect(other);
   assert.equal(f.connections.size,0); assert.equal(f.nodes,1);
 });
+test('waveform uses the existing analyser only when requested and clears on stop', () => {
+  const f=fixture(); let waveReads=0;
+  f.analyser.getByteTimeDomainData = data => { waveReads++; data.fill(160); };
+  f.spectrum.setActive(true); f.spectrum.read(0); assert.equal(waveReads,0);
+  f.spectrum.captureWaveform=true; f.spectrum.read(100); f.spectrum.read(101);
+  assert.equal(waveReads,1); assert.equal(f.nodes,1); assert.equal(f.spectrum.waveform[0],160);
+  f.spectrum.setActive(false); assert.ok(f.spectrum.waveform.every(v=>v===128));
+});

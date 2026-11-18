@@ -2,6 +2,7 @@
 export class AudioSpectrum {
   constructor() {
     this.levels = new Float32Array(12);
+    this.waveform = new Uint8Array(1024).fill(128);
     this.lastRead = -Infinity;
   }
   connect(output) {
@@ -31,7 +32,7 @@ export class AudioSpectrum {
   setActive(active) {
     this.active = active;
     this.sync();
-    if (!active) { this.levels.fill(0); this.lastRead = -Infinity; }
+    if (!active) { this.levels.fill(0); this.waveform.fill(128); this.lastRead = -Infinity; }
   }
   sync() {
     if (this.active && this.output && !this.connected) {
@@ -40,10 +41,11 @@ export class AudioSpectrum {
     } else if (!this.active) this.detach();
   }
   read(now) {
-    if (!this.connected || this.context.state !== 'running') { this.levels.fill(0); return this.levels; }
+    if (!this.connected || this.context.state !== 'running') { this.levels.fill(0); this.waveform.fill(128); return this.levels; }
     if (now - this.lastRead < 1000 / 15) return this.levels;
     this.lastRead = now;
     this.analyser.getByteFrequencyData(this.bins);
+    if (this.captureWaveform) this.analyser.getByteTimeDomainData(this.waveform);
     for (let i = 0; i < 12; i++) {
       let peak = 0;
       for (let bin = this.edges[i]; bin < this.edges[i + 1]; bin++) peak = Math.max(peak, this.bins[bin]);

@@ -126,6 +126,13 @@
                 <b id="cycle-value">00.00</b>
               </div>
             </div>
+            <div class="sound-view-switch" role="group" aria-label="사운드 시각화 선택">
+              <button type="button" data-sound-view="contour" aria-pressed="true">01 Contour</button>
+              <button type="button" data-sound-view="scope" aria-pressed="false">02 Scope</button>
+              <button type="button" data-sound-view="memory" aria-pressed="false">03 Memory</button>
+              <button type="button" data-sound-view="orbit" aria-pressed="false">04 Orbit</button>
+            </div>
+            <p id="sound-view-description" class="sound-view-description">주파수의 윤곽 · 저음에서 고음까지</p>
             <p id="visual-stanza" class="visual-stanza" hidden></p>
             <canvas id="visualizer" role="img" aria-label="연이 바뀌면 고정된 점들이 부드럽게 교차 전환됩니다. 점의 밝기는 대응 주파수 대역에 반응하며 단어별 독립 재생 표시는 아닙니다. 아래 12밴드는 실제 전체 음악 출력을 보여줍니다."></canvas>
             <div class="visual-caption" aria-label="문장에서 읽은 악기 파라미터">

@@ -1429,3 +1429,8 @@ footer { min-height:28px; }
   .tip-next-label { display:none; }
 }
 .compact-viewport .music-tip { display:none; }
+.sound-view-switch { display:flex; gap:4px; flex-wrap:wrap; margin:12px 0 6px; }
+.sound-view-switch button { flex:1 1 85px; min-height:36px; padding:7px 9px; border:1px solid #cbd1ca; border-radius:4px; background:transparent; color:#7d8981; font:10px ui-monospace,monospace; letter-spacing:.02em; cursor:pointer; }
+.sound-view-switch button[aria-pressed="true"] { background:#566d67; border-color:#566d67; color:#f2f3ee; }
+.sound-view-switch button:focus-visible { outline:2px solid #c97855; outline-offset:3px; }
+.sound-view-description { margin:0 0 10px; color:#7d8981; font-size:11px; line-height:1.5; }

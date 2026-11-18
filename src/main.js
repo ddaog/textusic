@@ -149,6 +149,16 @@ analysis.scale = initialArrangement.scale;
 let code = createStrudelCode(analysis, beat);
 const visualizer = new Visualizer(elements.canvas, analysis);
 visualizer.spectrum = spectrum;
+const viewDescriptions = { contour:'주파수의 윤곽 · 저음에서 고음까지', scope:'출력 파형 · 소리의 순간적인 진폭', memory:'주파수의 잔상 · 최근 약 4초의 소리', orbit:'단어의 별자리 · 기존 원형 시각화' };
+document.querySelectorAll('[data-sound-view]').forEach(button => {
+  button.addEventListener('click', () => {
+    visualizer.setMode(button.dataset.soundView);
+    document.querySelectorAll('[data-sound-view]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    document.querySelector('#sound-view-description').textContent = viewDescriptions[button.dataset.soundView];
+    elements.canvas.setAttribute('aria-label', viewDescriptions[button.dataset.soundView] + ' · 실제 전체 오디오 출력 기준');
+  });
+});
+elements.canvas.setAttribute('aria-label', viewDescriptions.contour + ' · 실제 전체 오디오 출력 기준');
 document.addEventListener('visibilitychange', () => spectrum.setActive(engine.playing && !document.hidden));
 visualizer.playbackCycle = () => engine.playing ? Math.max(0, engine.repl.scheduler.now() % 1) : 0;
 let updateTimer;

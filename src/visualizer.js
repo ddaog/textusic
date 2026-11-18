@@ -1,3 +1,4 @@
+import { SoundViews, SOUND_VIEWS } from './sound-views.js';
 const TAU = Math.PI * 2;
 const COLORS = {
   red: '#ef5b53',
@@ -113,6 +114,8 @@ export class Visualizer {
     this.context = canvas.getContext('2d');
     this.analysis = analysis;
     this.playing = false;
+    this.mode = 'contour';
+    this.soundViews = new SoundViews();
     this.startedAt = performance.now();
     this.pointer = { x: 0.5, y: 0.5, active: false };
     this.ripples = [];
@@ -180,6 +183,13 @@ export class Visualizer {
     this.playing = playing;
     if (!playing) this.previousVisual = null;
     if (playing) this.startedAt = performance.now();
+  }
+
+  setMode(mode) {
+    if (!SOUND_VIEWS.includes(mode)) return;
+    this.mode = mode;
+    this.soundViews.reset();
+    if (this.spectrum) this.spectrum.captureWaveform = mode === 'scope';
   }
 
   getCycle(now) {
@@ -518,9 +528,13 @@ export class Visualizer {
     }
     const cycle = this.getCycle(now);
     this.clear();
-    this.drawOrbit(now, cycle);
-    this.drawGraphs(now);
-    this.drawRipples(now);
+    if (this.mode === 'orbit') {
+      this.drawOrbit(now, cycle);
+      this.drawGraphs(now);
+      this.drawRipples(now);
+    } else {
+      this.soundViews.draw(this.context, this.width, this.height, this.mode, this.spectrum, now, this.playing, this.reducedMotion);
+    }
     window.dispatchEvent(new CustomEvent('formyiru:cycle', { detail: cycle }));
     requestAnimationFrame(this.frame);
   }
