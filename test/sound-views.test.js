@@ -25,10 +25,10 @@ test('history stays bounded and reads at most 15 rows a second', () => {
   assert.equal(view.cursor,15); assert.equal(view.history.length,64);
   view.reset(); assert.equal(view.cursor,0); assert.ok(view.history.every(row=>row.every(v=>v===0)));
 });
-test('word palette follows active stanza and the edited word, capped at three', () => {
+test('word palette follows active stanza and the edited word, capped at two', () => {
   const words = Array.from({length:6},(_,i)=>({start:i*10,end:i*10+5,text:`word${i}`,color:`#${i}${i}${i}${i}${i}${i}`}));
   const selected = linkedWords(words,{start:20,end:60},{start:50});
-  assert.equal(selected[0].start,50); assert.equal(selected.length,3);
+  assert.equal(selected[0].start,50); assert.equal(selected.length,2);
   assert.ok(selected.every(w=>w.start>=20));
   assert.ok(!linkedWords(words,{start:20,end:60},{start:0}).some(w=>w.start===0));
   assert.deepEqual(SOUND_VIEWS,['contour','scope','memory']);
@@ -82,4 +82,17 @@ test('memory records the interpolated palette and preserves earlier colors', () 
   assert.equal(view.colors[2],'rgb(0 0 255)');
   assert.equal(view.colors[0],'rgb(255 0 0)');
   assert.equal(view.playback.outgoing.length,0);
+});
+
+test('word captions fade through clear space instead of overlapping old and new text',()=>{
+  const view=new SoundViews(), spectrum={read:()=>new Float32Array(12)};
+  view.setPlaybackWords([sourceWord('바다','#00cccc')],0,0);
+  view.setPlaybackWords([sourceWord('달빛','#bbbbff',10)],100,1000);
+  for (const time of [200,400,600,800,1100]) {
+    const ctx=context(); view.draw(ctx,300,200,'contour',spectrum,time,true,false);
+    assert.ok(!(ctx.labels.includes('바다') && ctx.labels.includes('달빛')));
+  }
+  view.setPlaybackWords([sourceWord('숲','#00aa00',20)],1200,1000);
+  view.setPlaybackWords([sourceWord('꽃','#ff88aa',30)],1300,1000);
+  assert.equal(view.playback.outgoing[0].text,'달빛');
 });

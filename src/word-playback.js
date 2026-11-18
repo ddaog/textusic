@@ -22,24 +22,54 @@ export function mapWordCues(score, text, words) {
   });
 }
 
-// A voice's contributors share its real gate timing. Spotlight a few contributors
-// per half-bar, rather than claiming that each word owns an isolated audio stem.
+const tail = .12;
+const barPlans = new WeakMap();
+function plansFor(cues) {
+  if (barPlans.has(cues)) return barPlans.get(cues);
+  const plans = Array.from({length:4}, (_,bar) => {
+    const layers = {melody:new Map(),bass:new Map(),relation:new Map()};
+    for (const cue of cues) {
+      if (cue.start >= bar+1 || cue.start+cue.duration+tail <= bar || !layers[cue.layer]) continue;
+      const layer = layers[cue.layer];
+      for (const source of cue.sources) {
+        let entry = layer.get(source.start);
+        if (!entry) { entry={word:source,layer:cue.layer,cues:[]}; layer.set(source.start,entry); }
+        if (entry.cues.at(-1)!==cue) entry.cues.push(cue);
+      }
+    }
+    return Object.fromEntries(Object.entries(layers).map(([name,entries]) =>
+      [name,[...entries.values()].sort((a,b)=>a.word.start-b.word.start)]));
+  });
+  barPlans.set(cues,plans);
+  return plans;
+}
+
+// Hold a pair of contributors for the full bar, including the spaces between
+// notes. Only their activity follows real gates; names never shuffle on a rest.
+// These are contributors to voices, not isolated word-to-note audio stems.
 export function soundingWords(sections, cycle) {
   if (!sections.length || !Number.isFinite(cycle) || cycle < 0) return [];
   const { index } = stanzaPosition(cycle, sections.length);
   const phase = cycle % 4;
-  const phrase = Math.floor(cycle / (sections.length * 4)) * 8 + Math.floor(phase * 2);
-  const selected = new Map();
-  for (const cue of sections[index] ?? []) {
-    const elapsed = phase - cue.start;
-    const tail = .12;
-    if (elapsed < 0 || elapsed >= cue.duration + tail || !cue.sources.length) continue;
-    const activity = elapsed < cue.duration ? .65 + .35 * Math.exp(-elapsed * 12)
-      : .65 * (1 - (elapsed - cue.duration) / tail);
-    const offset = cue.layer === 'bass' ? 1 : cue.layer === 'relation' ? 2 : 0;
-    const word = cue.sources[(phrase + offset) % cue.sources.length];
-    const prior = selected.get(word.start);
-    if (!prior || prior.activity < activity) selected.set(word.start, { ...word, activity, layer:cue.layer });
-  }
-  return [...selected.values()].sort((a,b) => b.activity - a.activity || a.start - b.start).slice(0,3).sort((a,b)=>a.start-b.start);
+  const bar = Math.floor(phase);
+  const phrase = Math.floor(cycle / (sections.length * 4)) * 4 + bar;
+  const cues = sections[index];
+  if (!cues?.length) return [];
+  const pools = plansFor(cues)[bar];
+  const firstPool = pools.melody.length ? pools.melody : pools.bass.length ? pools.bass : pools.relation;
+  if (!firstPool.length) return [];
+  const first = firstPool[phrase % firstPool.length];
+  const secondPool = [pools.bass,pools.relation,pools.melody]
+    .map(pool=>pool.filter(entry=>entry.word.start!==first.word.start)).find(pool=>pool.length);
+  const second = secondPool?.[phrase % secondPool.length];
+  return [first,second].filter(Boolean).map(entry => {
+    let activity = 0;
+    for (const cue of entry.cues) {
+      const elapsed = phase-cue.start;
+      if (elapsed < 0 || elapsed >= cue.duration+tail) continue;
+      activity = Math.max(activity,elapsed < cue.duration ? .65+.35*Math.exp(-elapsed*12)
+        : .65*(1-(elapsed-cue.duration)/tail));
+    }
+    return {...entry.word,activity,layer:entry.layer};
+  });
 }

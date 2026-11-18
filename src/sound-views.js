@@ -1,3 +1,4 @@
+import { WaveformDisplay } from './waveform-display.js';
 export const SOUND_VIEWS = ['contour', 'scope', 'memory'];
 const INK = '#617b76', ACCENT = '#c97855', GRID = '#cdd3cc';
 const names = { contour:'01 / SPECTRAL CONTOUR', scope:'02 / WAVEFORM', memory:'03 / SPECTRAL MEMORY' };
@@ -29,7 +30,7 @@ export function linkedWords(words = [], section = null, cue = null) {
   const edited = cue && active.find(word => word.start === cue.start);
   if (edited) selected.push(edited);
   for (const word of active) {
-    if (selected.length === 3) break;
+    if (selected.length === 2) break;
     if (!selected.some(item => item.color === word.color)) selected.push(word);
   }
   return selected;
@@ -42,12 +43,13 @@ export class SoundViews {
     this.cursor = 0; this.last = -Infinity;
     this.words = []; this.colors = new Array(64).fill(INK);
     this.playback = null;
+    this.scope = new WaveformDisplay();
   }
-  reset() { this.history.forEach(row => row.fill(0)); this.colors.fill(INK); this.cursor = 0; this.last = -Infinity; }
+  reset() { this.history.forEach(row => row.fill(0)); this.colors.fill(INK); this.cursor = 0; this.last = -Infinity; this.scope.reset(); }
   setWords(words, section, cue) { this.words = linkedWords(words, section, cue); this.cue = cue; }
   setPlaybackWords(words, now, duration = 800, reducedMotion = false) {
     if (words === null) { this.playback = null; return; }
-    const next = words.slice(0,3).map(word => ({...word, activity:clamp01(word.activity ?? 1)}));
+    const next = words.slice(0,2).map(word => ({...word, activity:clamp01(word.activity ?? 1)}));
     const key = next.map(word => `${word.start}:${word.end}:${word.text}:${word.color}`).join('|');
     if (this.playback?.key === key) {
       this.playback.words = next;
@@ -56,9 +58,10 @@ export class SoundViews {
     }
     const previous = this.playback;
     const colors = previous ? this.paletteAt(now) : this.words.map(word=>word.color);
-    const from = Array.from({length:3},(_,i)=>colorChannels(colors[i] ?? colors.at(-1) ?? INK));
-    const to = Array.from({length:3},(_,i)=>colorChannels(next[i]?.color ?? next.at(-1)?.color ?? INK));
-    this.playback = { key, words:next, outgoing:previous?.words ?? [], from, to, started:now,
+    const from = Array.from({length:2},(_,i)=>colorChannels(colors[i] ?? colors.at(-1) ?? INK));
+    const to = Array.from({length:2},(_,i)=>colorChannels(next[i]?.color ?? next.at(-1)?.color ?? INK));
+    const outgoing = previous ? (this.playbackProgress(now) < .5 ? previous.outgoing : previous.words) : [];
+    this.playback = { key, words:next, outgoing, from, to, started:now,
       duration:reducedMotion ? 0 : Math.max(0,duration) };
   }
   playbackProgress(now) {
@@ -90,22 +93,30 @@ export class SoundViews {
     ctx.textAlign = 'right'; ctx.fillStyle = playing ? ACCENT : '#929b92';
     ctx.fillText(playing ? 'LIVE / OUTPUT' : 'STANDBY', width - x, 17);
     ctx.textAlign = 'left';
-    const drawWords = (words, opacity) => words.forEach((word,i) => {
-      const px = x + i * w / 3;
-      ctx.globalAlpha = opacity * (.5 + .5 * (word.activity ?? 1));
+    const drawWord = (word, i, opacity) => {
+      if (!word || opacity <= 0) return;
+      const px = x + i * w / 2;
+      ctx.globalAlpha = opacity * (.65 + .35 * (word.activity ?? 1));
       ctx.fillStyle = word.color;
-      ctx.fillText('· ' + [...word.text].slice(0,7).join(''), px, 36);
+      ctx.fillRect(px,31,3,3);
+      ctx.fillStyle = '#65736d';
+      ctx.fillText([...word.text].slice(0,10).join(''), px+10, 36);
       if (this.cue?.start === word.start && now - this.cue.born < 700) {
         ctx.globalAlpha = opacity * (reducedMotion ? .5 : Math.max(0,1-(now-this.cue.born)/700));
-        ctx.fillRect(px,40,Math.min(w/3-8,60),1.5); ctx.globalAlpha = 1;
+        ctx.fillRect(px,40,Math.min(w/2-8,60),1); ctx.globalAlpha = 1;
       }
-    });
+    };
     if (this.playback) {
       const progress = reducedMotion ? 1 : this.playbackProgress(now);
-      if (progress < 1) drawWords(this.playback.outgoing,1-progress);
-      else this.playback.outgoing = [];
-      drawWords(this.playback.words,progress);
-    } else drawWords(this.words,1);
+      // Fixed slots, fade THROUGH empty ink: never superimpose two words.
+      for (let i=0;i<2;i++) {
+        const before=this.playback.outgoing[i], after=this.playback.words[i];
+        if (before?.start === after?.start && before?.text === after?.text) drawWord(after,i,1);
+        else if (progress < .5) drawWord(before,i,1-progress*2);
+        else drawWord(after,i,(progress-.5)*2);
+      }
+      if (progress >= 1) this.playback.outgoing = [];
+    } else this.words.forEach((word,i)=>drawWord(word,i,1));
     ctx.globalAlpha = 1;
     ctx.strokeStyle = GRID; ctx.lineWidth = .5;
     for (let i = 0; i <= 4; i++) {
@@ -126,19 +137,20 @@ export class SoundViews {
       ctx.fillStyle = fill; ctx.fill();
       path(); ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
       points.forEach(([px,py], i) => {
-        ctx.fillStyle = colors[Math.min(colors.length-1,Math.floor(i/4))] ?? INK; ctx.globalAlpha = .3 + levels[i] * .7;
+        ctx.fillStyle = colors[Math.min(colors.length-1,Math.floor(i/6))] ?? INK; ctx.globalAlpha = .3 + levels[i] * .7;
         ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI*2); ctx.fill();
       }); ctx.globalAlpha = 1;
     } else if (mode === 'scope') {
-      const wave = spectrum?.waveform;
-      ctx.strokeStyle = stroke; ctx.lineWidth = 1.2; ctx.beginPath();
-      // No automatic gain: a quiet signal really looks smaller. No fake oscillation.
-      const count = wave?.length ?? 256;
+      const wave = this.scope.sample(playing ? spectrum?.waveform : null,now,reducedMotion);
+      ctx.strokeStyle = stroke; ctx.beginPath();
+      // Display-only sensitivity. Real samples, fixed gain, bounded peaks.
+      const count = wave.length;
       for (let i = 0; i < count; i++) {
-        const px = x + w * i / (count - 1), py = y + h / 2 - ((wave?.[i] ?? 128) - 128) / 128 * h * .46;
+        const px = x + w * i / (count - 1), py = y + h / 2 - wave[i] * h * .46;
         if (!i) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
-      ctx.stroke(); ctx.fillStyle = ink;
+      ctx.globalAlpha = .12; ctx.lineWidth = 5; ctx.stroke();
+      ctx.globalAlpha = 1; ctx.lineWidth = 1.4; ctx.stroke(); ctx.fillStyle = ink;
       ctx.fillRect(x - 3, y + h / 2 - 1, 6, 2);
     } else if (mode === 'memory') {
       // Reduced-motion uses a stationary current-spectrum matrix instead of scrolling history.
@@ -157,7 +169,7 @@ export class SoundViews {
     ctx.globalAlpha = 1; ctx.fillStyle = '#89948b'; ctx.textAlign = 'left';
     ctx.fillText(mode === 'memory' ? (reducedMotion ? 'CURRENT SPECTRUM' : 'PAST  ←  ~4s') : mode === 'scope' ? 'TIME / 1,024 SAMPLES' : 'LOW', x, height - 10);
     ctx.textAlign = 'right';
-    ctx.fillText(mode === 'memory' ? 'NOW · LOW ↑ HIGH' : mode === 'scope' ? 'MONO SUM' : 'MID → AIR', width-x, height-10);
+    ctx.fillText(mode === 'memory' ? 'NOW · LOW ↑ HIGH' : mode === 'scope' ? 'DISPLAY ×3' : 'MID → AIR', width-x, height-10);
     ctx.restore();
   }
 }

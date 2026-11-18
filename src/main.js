@@ -369,7 +369,7 @@ function updateWordPlayback(now) {
   const nextNodes = new Set();
   for (const word of playbackWords) {
     const node = wordNodes.get(word.start);
-    if (!node) continue;
+    if (!node || word.activity <= .08) continue;
     nextNodes.add(node);
     node.classList.add('is-sounding-word');
     node.style.setProperty('--word-activity',word.activity.toFixed(2));
@@ -380,7 +380,7 @@ function updateWordPlayback(now) {
   }
   soundingNodes = nextNodes;
   visualizer.soundViews.setPlaybackWords(engine.playing ? playbackWords : null,now,
-    stanza !== playbackStanza ? visualizer.transitionDuration : 600,visualizer.reducedMotion);
+    stanza !== playbackStanza ? visualizer.transitionDuration : 800,visualizer.reducedMotion);
   playbackStanza = stanza;
 }
 function renderWordHighlight() {
