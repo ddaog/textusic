@@ -101,3 +101,14 @@ test('inactive text is identical neutral ink for every effect and repeated word'
     assert.equal(parts[0].active,false);
   }
 });
+
+test('recorded source-word accents never brighten an inactive stanza', () => {
+  const ctx=context(), accents=[];
+  ctx.fillRect=function(x,y,w,h) { if (w<100) accents.push({x,y,alpha:this.globalAlpha}); };
+  const scene={words:[{start:0,end:2,color:'#123456'},{start:4,end:6,color:'#654321'}],edges:[]};
+  drawVideoFrame({getContext:()=>ctx},{},{text:'바다\n\n달빛',scene,active:{start:4,end:6},
+    playingWords:[{start:0,activity:1},{start:4,activity:1}],reducedMotion:true,now:0});
+  assert.equal(accents.length,2); // active word background + underline only
+  assert.equal(ctx.calls.find(c=>c.text==='바다').alpha,.38);
+  assert.ok(accents.every(c=>c.alpha>0));
+});

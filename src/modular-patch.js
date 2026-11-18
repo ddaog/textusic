@@ -48,7 +48,7 @@ export function createModularPatch(analysis) {
   return { modules, cables };
 }
 
-export function compileModularVoices(patch, { chords, root, scale }) {
+export function compileModularVoices(patch, { chords, root, scale, onVoice }) {
   const alternate = (bars) => '<' + bars.map((bar) => '[' + bar + ']').join(' ') + '>';
   return patch.modules.map((module) => {
     const input = (kind) => patch.cables.find((cable) => cable.target === module.id && cable.kind === kind);
@@ -58,7 +58,10 @@ export function compileModularVoices(patch, { chords, root, scale }) {
     const cutoff = modulation
       ? `sine.slow(${patch.modules[modulation.source].period}).range(${Math.round(module.cutoff * (1 - modulation.depth))},${Math.round(module.cutoff * (1 + modulation.depth))})`
       : String(module.cutoff);
-    const notes = alternate(phraseMelody(chords.map((chord) => gate.gate.map((open, step) => open ? chord + pitch.pitch[step] : '~').join(' ')), gate.id * 37, gate.syncopation));
+    const bars = phraseMelody(chords.map((chord) => gate.gate.map((open, step) => open ? chord + pitch.pitch[step] : '~').join(' ')), gate.id * 37, gate.syncopation);
+    const sources = [module,gate,pitch].flatMap(source => Array.from({length:source.last-source.first+1},(_,index) => source.first+index));
+    onVoice?.({bars,sources,layer:'melody'});
+    const notes = alternate(bars);
     // Bounded mixer headroom; patching a control cannot raise the gain ceiling.
     const gain = (.115 / Math.sqrt(patch.modules.length)).toFixed(3);
     return `n("${notes}").scale("${root}4:${scale}").s("${module.oscillator}").lpf(${cutoff}).attack(${module.attack.toFixed(3)}).decay(.18).sustain(.12).release(.22).room(.2).gain(${gain}) /* M${module.id + 1}: VCO > VCF > VCA */`;

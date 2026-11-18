@@ -1,6 +1,26 @@
 export const SOUND_VIEWS = ['contour', 'scope', 'memory'];
 const INK = '#617b76', ACCENT = '#c97855', GRID = '#cdd3cc';
 const names = { contour:'01 / SPECTRAL CONTOUR', scope:'02 / WAVEFORM', memory:'03 / SPECTRAL MEMORY' };
+const clamp01 = value => Math.max(0, Math.min(1, value));
+
+// Word profiles use hex or modern hsl(); no DOM/color readback in the render loop.
+export function colorChannels(color) {
+  const hex = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(color);
+  if (hex) {
+    const value = hex[1].length === 3 ? [...hex[1]].map(c => c+c).join('') : hex[1];
+    return [0,2,4].map(i => parseInt(value.slice(i,i+2),16));
+  }
+  const rgb = /^rgb\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)\)$/i.exec(color);
+  if (rgb) return rgb.slice(1).map(Number);
+  const hsl = /^hsl\(([-\d.]+)(?:deg)?[,\s]+([\d.]+)%[,\s]+([\d.]+)%\)$/i.exec(color);
+  if (hsl) {
+    const h = ((Number(hsl[1]) % 360)+360)%360/60, s=clamp01(Number(hsl[2])/100), l=clamp01(Number(hsl[3])/100);
+    const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs(h%2-1)), m=l-c/2;
+    return [[c,x,0],[x,c,0],[0,c,x],[0,x,c],[x,0,c],[c,0,x]][Math.floor(h)].map(v=>(v+m)*255);
+  }
+  return [97,123,118];
+}
+const blendColor = (a,b,t) => `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(' ')})`;
 
 // Semantic color identity, not per-word frequency attribution.
 export function linkedWords(words = [], section = null, cue = null) {
@@ -21,17 +41,45 @@ export class SoundViews {
     this.history = Array.from({ length:64 }, () => new Float32Array(12));
     this.cursor = 0; this.last = -Infinity;
     this.words = []; this.colors = new Array(64).fill(INK);
+    this.playback = null;
   }
   reset() { this.history.forEach(row => row.fill(0)); this.colors.fill(INK); this.cursor = 0; this.last = -Infinity; }
   setWords(words, section, cue) { this.words = linkedWords(words, section, cue); this.cue = cue; }
+  setPlaybackWords(words, now, duration = 800, reducedMotion = false) {
+    if (words === null) { this.playback = null; return; }
+    const next = words.slice(0,3).map(word => ({...word, activity:clamp01(word.activity ?? 1)}));
+    const key = next.map(word => `${word.start}:${word.end}:${word.text}:${word.color}`).join('|');
+    if (this.playback?.key === key) {
+      this.playback.words = next;
+      if (reducedMotion) this.playback.duration = 0;
+      return;
+    }
+    const previous = this.playback;
+    const colors = previous ? this.paletteAt(now) : this.words.map(word=>word.color);
+    const from = Array.from({length:3},(_,i)=>colorChannels(colors[i] ?? colors.at(-1) ?? INK));
+    const to = Array.from({length:3},(_,i)=>colorChannels(next[i]?.color ?? next.at(-1)?.color ?? INK));
+    this.playback = { key, words:next, outgoing:previous?.words ?? [], from, to, started:now,
+      duration:reducedMotion ? 0 : Math.max(0,duration) };
+  }
+  playbackProgress(now) {
+    const state = this.playback;
+    if (!state || !state.duration) return 1;
+    const t=clamp01((now-state.started)/state.duration);
+    return t*t*(3-2*t);
+  }
+  paletteAt(now) {
+    if (!this.playback) return this.words.map(word=>word.color);
+    const t=this.playbackProgress(now);
+    return this.playback.from.map((color,i)=>blendColor(color,this.playback.to[i],t));
+  }
   draw(ctx, width, height, mode, spectrum, now, playing, reducedMotion) {
     const levels = spectrum?.read(now) ?? new Float32Array(12);
+    const colors = this.paletteAt(now);
     if (mode === 'memory' && playing && now - this.last >= 1000 / 15) {
-      this.colors[this.cursor] = this.words[0]?.color ?? INK;
+      this.colors[this.cursor] = colors[0] ?? INK;
       this.history[this.cursor].set(levels); this.cursor = (this.cursor + 1) % 64; this.last = now;
     }
     const x = 18, y = 51, w = Math.max(1, width - 36), h = Math.max(20, height - 81);
-    const colors = this.words.map(word => word.color);
     const ink = colors[0] ?? INK;
     const stroke = ctx.createLinearGradient(x,0,x+w,0);
     (colors.length ? colors : [INK, ACCENT]).forEach((color,i,a) => stroke.addColorStop(a.length === 1 ? 0 : i/(a.length-1),color));
@@ -42,15 +90,23 @@ export class SoundViews {
     ctx.textAlign = 'right'; ctx.fillStyle = playing ? ACCENT : '#929b92';
     ctx.fillText(playing ? 'LIVE / OUTPUT' : 'STANDBY', width - x, 17);
     ctx.textAlign = 'left';
-    this.words.forEach((word,i) => {
+    const drawWords = (words, opacity) => words.forEach((word,i) => {
       const px = x + i * w / 3;
+      ctx.globalAlpha = opacity * (.5 + .5 * (word.activity ?? 1));
       ctx.fillStyle = word.color;
       ctx.fillText('· ' + [...word.text].slice(0,7).join(''), px, 36);
       if (this.cue?.start === word.start && now - this.cue.born < 700) {
-        ctx.globalAlpha = reducedMotion ? .5 : Math.max(0,1-(now-this.cue.born)/700);
+        ctx.globalAlpha = opacity * (reducedMotion ? .5 : Math.max(0,1-(now-this.cue.born)/700));
         ctx.fillRect(px,40,Math.min(w/3-8,60),1.5); ctx.globalAlpha = 1;
       }
     });
+    if (this.playback) {
+      const progress = reducedMotion ? 1 : this.playbackProgress(now);
+      if (progress < 1) drawWords(this.playback.outgoing,1-progress);
+      else this.playback.outgoing = [];
+      drawWords(this.playback.words,progress);
+    } else drawWords(this.words,1);
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = GRID; ctx.lineWidth = .5;
     for (let i = 0; i <= 4; i++) {
       ctx.beginPath(); ctx.moveTo(x, y + h * i / 4); ctx.lineTo(x + w, y + h * i / 4); ctx.stroke();

@@ -1440,3 +1440,11 @@ footer { min-height:28px; }
   to { box-shadow:0 2px 0 transparent; background-color:transparent; }
 }
 @media(prefers-reduced-motion:reduce) { .composer .word-token.is-input-echo { animation:none; } }
+
+/* Voice provenance accents: limited to three contributors, without relayout.
+   The inactive-stanza rule always wins, including during pending text edits. */
+.composer .word-token.is-sounding-word:not(.is-other-stanza) {
+  background-color:color-mix(in srgb,var(--word-color) calc(8% + var(--word-activity, 1) * 9%),transparent);
+  box-shadow:0 2px 0 color-mix(in srgb,var(--word-color) 65%,transparent);
+  border-radius:3px;
+}

@@ -48,7 +48,7 @@ export function createArrangement(analysis, beat = {}) {
   const drums = mode === 'off' ? 0 : intensity * (mode === 'on' ? 1 : ramp((count - 2) / 8));
   return {
     scale, chords, melody, richness, drums, tension,
-    relationMelody, relationGain: responseEdges.length ? .025 : 0,
+    relationMelody, responseEdges, relationGain: responseEdges.length ? .025 : 0,
     rhythm: createRhythm(analysis, clamp(richness + relationEnergy * .25, 0, 1), tension),
     bpm: Math.round(clamp(76 + analysis.axes.motion * 30, 76, 108) / 2) * 2,
     padGain: 0.012 + richness * 0.06,
@@ -58,7 +58,7 @@ export function createArrangement(analysis, beat = {}) {
   };
 }
 
-export function createStrudelCode(analysis, beat = {}, { foundation, nextFoundation } = {}) {
+export function createStrudelCode(analysis, beat = {}, { foundation, nextFoundation, onVoice } = {}) {
   const arrangement = createArrangement(foundation ? { ...foundation, syntax: analysis.syntax } : analysis, beat);
   const { chords, melody, richness, drums } = arrangement;
   const phrasedMelody = phraseMelody(melody, (foundation ?? analysis).seed, wordOrderSyncopation(foundation ?? analysis));
@@ -81,7 +81,8 @@ export function createStrudelCode(analysis, beat = {}, { foundation, nextFoundat
   const ambient = ambientHarmony(chords, (foundation ?? analysis).seed, tension, boundary);
   const chordPattern = '<' + ambient.voicings.map(notes => '[' + notes.join(',') + ']').join(' ') + '>';
   const padCutoff = `sine.slow(${ambient.breath}).range(${Math.round(550 + analysis.axes.light * 350)},${Math.round(1000 + analysis.axes.light * 850)})`;
-  const bass = alternate(chords.map((root) => root + ' ~ ~ ~ ' + root + ' ~ ' + (richness > 0.65 ? root + 4 : '~') + ' ~'));
+  const bassBars = chords.map((root) => root + ' ~ ~ ~ ' + root + ' ~ ' + (richness > 0.65 ? root + 4 : '~') + ' ~');
+  const bass = alternate(bassBars);
   const parts = [
     'n("' + alternate(phrasedMelody) + '").scale("' + scale + '").s("' + (tension ? 'sawtooth' : 'triangle') + '").lpf(' + Math.round(cutoff + tension * 900) + ').attack(' + attack + ').decay(.22).sustain(.12).release(' + (tension ? '.14' : '.35') + ').room(' + room + ').delay(.12).delaytime(.375).delayfeedback(.22).gain(' + gain(arrangement.melodyGain * (1 - tension * .3)) + ')',
     'n("' + chordPattern + '").scale("' + padScale + '").s("triangle").hpf(180).lpf(' + padCutoff + ').attack(.65).decay(.5).sustain(.45).release(.8).room(' + room + ').pan(sine.slow(' + (ambient.breath * 2) + ').range(.38,.62)).gain(' + gain(arrangement.padGain * .8) + ')',
@@ -103,9 +104,15 @@ export function createStrudelCode(analysis, beat = {}, { foundation, nextFoundat
     patch.cables = [...patch.cables.filter(c => c.kind === 'cutoff'), ...original.cables.filter(c => c.kind !== 'cutoff')];
   }
   if (patch.modules.length > 1) {
-    parts.splice(0, 1, ...compileModularVoices(patch, { chords, root, scale:arrangement.scale }));
-  }
+    parts.splice(0, 1, ...compileModularVoices(patch, { chords, root, scale:arrangement.scale, onVoice }));
+  } else onVoice?.({bars:phrasedMelody,layer:'melody'});
+  if (analysis.tokens.length >= 3) onVoice?.({bars:bassBars,layer:'bass'});
   if (arrangement.relationGain) {
+    const sourceSteps = Array.from({length:16},() => []);
+    arrangement.responseEdges.forEach((edge,index) => {
+      sourceSteps[index*4] = [edge.from]; sourceSteps[index*4+2] = [edge.to];
+    });
+    onVoice?.({bars:arrangement.relationMelody,sourceSteps,layer:'relation'});
     parts.push('n("' + alternate(arrangement.relationMelody) + '").scale("' + scale + '").s("sine").pan(.65).attack(.015).decay(.12).sustain(0).release(.2).gain(' + gain(arrangement.relationGain) + ')');
   }
   if (drums > 0) {

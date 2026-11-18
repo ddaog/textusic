@@ -2,6 +2,7 @@ import './styles.css';
 import './reading.css';
 import './code-layout.css';
 import { TypingSound } from './typing-sound.js';
+import { mapWordCues, soundingWords } from './word-playback.js';
 import { VideoRecorder } from './video-recorder.js';
 import { AudioSpectrum } from './audio-spectrum.js';
 import { createStanzaScore, stanzaPosition, visiblePlayingSection } from './stanzas.js';
@@ -350,9 +351,37 @@ let visualWords = [];
 let visualCue = null;
 let visualText = '';
 let visualEchoTimer;
+let cueScore, cueText, cueWords, mappedCues = [];
+let wordNodes = new Map(), soundingNodes = new Set(), playbackWords = [];
+let playbackStanza = -1;
 function syncWordSoundLink() {
   const section = engine.playing ? visiblePlayingSection(elements.sentence.value, engine.score, engine.repl?.scheduler.now() ?? 0) : null;
   visualizer.soundViews.setWords(visualWords, section, visualCue);
+}
+function updateWordPlayback(now) {
+  if (cueScore !== engine.score || cueText !== elements.sentence.value || cueWords !== visualWords) {
+    cueScore = engine.score; cueText = elements.sentence.value; cueWords = visualWords;
+    mappedCues = mapWordCues(cueScore, cueText, visualWords);
+  }
+  const cycle = engine.playing ? engine.repl?.scheduler.now() ?? 0 : 0;
+  const stanza = engine.playing ? stanzaPosition(cycle,mappedCues.length).index : -1;
+  playbackWords = engine.playing ? soundingWords(mappedCues,cycle) : [];
+  const nextNodes = new Set();
+  for (const word of playbackWords) {
+    const node = wordNodes.get(word.start);
+    if (!node) continue;
+    nextNodes.add(node);
+    node.classList.add('is-sounding-word');
+    node.style.setProperty('--word-activity',word.activity.toFixed(2));
+  }
+  for (const node of soundingNodes) if (!nextNodes.has(node)) {
+    node.classList.remove('is-sounding-word');
+    node.style.removeProperty('--word-activity');
+  }
+  soundingNodes = nextNodes;
+  visualizer.soundViews.setPlaybackWords(engine.playing ? playbackWords : null,now,
+    stanza !== playbackStanza ? visualizer.transitionDuration : 600,visualizer.reducedMotion);
+  playbackStanza = stanza;
 }
 function renderWordHighlight() {
   const host = elements.sentenceHighlight;
@@ -392,6 +421,7 @@ function renderWordHighlight() {
   if (cursor < text.length) host.append(document.createTextNode(text.slice(cursor)));
   if (!text || text.endsWith('\n')) host.append(document.createTextNode('\u200b'));
   visualWords = [...host.querySelectorAll('.word-token')].map(word => ({ start:Number(word.dataset.start), end:Number(word.dataset.start)+word.textContent.length, text:word.textContent, color:word.style.getPropertyValue('--word-color') }));
+  wordNodes = new Map([...host.querySelectorAll('.word-token')].map(node => [Number(node.dataset.start),node]));
   if (text !== visualText) {
     const caret = elements.sentence.selectionStart;
     const word = visualWords.find(word => caret > word.start && caret <= word.end);
@@ -405,6 +435,7 @@ function renderWordHighlight() {
     visualEchoTimer = setTimeout(() => echoed?.classList.remove('is-input-echo'), Math.max(0,700-(performance.now()-visualCue.born)));
   }
   syncWordSoundLink();
+  updateWordPlayback(performance.now());
   syncEditorLayout();
   scheduleRelations();
 }
@@ -756,6 +787,7 @@ function recordedContent() {
     scene: videoScene?.text === elements.sentence.value ? videoScene : undefined,
     active: visiblePlayingSection(elements.sentence.value, score, engine.repl?.scheduler.now() ?? 0),
     energy: Math.pow(Math.max(0, ...spectrum.levels), 1.5),
+    playingWords: playbackWords,
     reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches };
 }
 
@@ -892,6 +924,7 @@ window.addEventListener('formyiru:cycle', (event) => {
     lastLineMeter = now;
     const energy = engine.playing ? Math.max(0, ...spectrum.levels) : 0;
     elements.relationLines.style.setProperty('--line-energy', Math.pow(energy, 1.5).toFixed(3));
+    updateWordPlayback(now);
   }
   const cycle = engine.playing ? engine.repl.scheduler.now() : 0;
   elements.cycleValue.textContent = Math.max(0, cycle % 1).toFixed(2).padStart(5, '0');

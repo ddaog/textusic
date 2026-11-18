@@ -4,6 +4,7 @@ import { addMeaningLinks } from './meaning-links.js';
 import { createArrangement, createStrudelCode } from './music-engine.js';
 import { createModularPatch } from './modular-patch.js';
 import { bridgeDegrees } from './tonal-transition.js';
+import { createSourceCues } from './source-cues.js';
 
 export function splitStanzas(text) {
   const sections = [];
@@ -60,7 +61,9 @@ export function createStanzaScore(text, variation, beat, semantics = {}, foundat
     Object.assign(analysis, songAnchor);
     const arrangement = createArrangement({ ...anchor, syntax:analysis.syntax }, beat);
     analysis.root = anchor.root; analysis.scale = arrangement.scale; analysis.bpm = arrangement.bpm;
-    return { ...section, analysis, foundation:anchor, code:createStrudelCode(analysis, beat, { foundation:anchor }) };
+    const voices = [];
+    const code = createStrudelCode(analysis, beat, { foundation:anchor, onVoice:voice => voices.push(voice) });
+    return { ...section, analysis, foundation:anchor, code, cues:createSourceCues(analysis,voices) };
   });
   const bpm = sections[0]?.analysis.bpm ?? 84;
   if (sections.length < 2) return { text, sections, bpm, code:sections[0]?.code ?? '' };

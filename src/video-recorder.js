@@ -32,7 +32,7 @@ export function fitVideoPoem(ctx, text, width = 468, height = 290, fontFamily = 
 const poemLayouts = new WeakMap();
 
 // One bounded-size canvas; copy the existing visualization, never run another synth/FFT.
-export function drawVideoFrame(canvas, source, { text = '', scene, active, energy = 0, reducedMotion = false, now = performance.now() } = {}) {
+export function drawVideoFrame(canvas, source, { text = '', scene, active, energy = 0, playingWords = [], reducedMotion = false, now = performance.now() } = {}) {
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#e6e8e3'; ctx.fillRect(0, 0, 540, 960);
   ctx.fillStyle = '#737e78'; ctx.font = '14px sans-serif';
@@ -47,6 +47,11 @@ export function drawVideoFrame(canvas, source, { text = '', scene, active, energ
   ctx.font = `${size}px ${scene?.fontFamily || 'serif'}`;
   ctx.fillStyle = '#424b48';
   updateVideoEmphasis(layout.parts, active, now - (layout.now ?? now), reducedMotion);
+  const blend = reducedMotion ? 1 : 1 - Math.exp(-Math.min(200,Math.max(0,now-(layout.now ?? now)))/260);
+  for (const part of layout.parts) {
+    const target = part.active ? playingWords.find(word=>word.start===part.word?.start)?.activity ?? 0 : 0;
+    part.sounding = part.active ? (part.sounding ?? 0) + (target-(part.sounding ?? 0))*blend : 0;
+  }
   layout.now = now;
   if (scene) {
     drawVideoWords(ctx, layout.parts, size, scene.edges, energy);

@@ -75,6 +75,13 @@ export function drawVideoWords(ctx, parts, size, edges, energy = 0) {
       continue;
     }
     const color = word?.color || '#424b48', accent = word?.accent || color;
+    if (part.sounding > .02) {
+      ctx.fillStyle = color; ctx.globalAlpha = part.alpha * part.sounding * .17;
+      ctx.fillRect(x,y-size*.85,width,size);
+      ctx.globalAlpha = part.alpha * part.sounding * .65;
+      ctx.fillRect(x,y+size*.16,width,Math.max(.7,size*.04));
+      ctx.globalAlpha = part.alpha;
+    }
     ctx.fillStyle = color; ctx.shadowBlur = 0;
     if (word && ['leaf', 'bloom'].includes(word.effect)) {
       ctx.globalAlpha = part.alpha * .16; ctx.fillStyle = accent;
