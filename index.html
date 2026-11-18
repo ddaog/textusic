@@ -126,14 +126,14 @@
                 <b id="cycle-value">00.00</b>
               </div>
             </div>
-            <div class="sound-view-switch" role="group" aria-label="사운드 시각화 선택" title="지금 연주되는 선율·베이스에 기여한 단어를 차례로 비춥니다. 색은 그 단어에서, 그래프의 움직임은 전체 음악 출력에서 가져옵니다. 단어별 소리를 따로 측정하는 표시는 아닙니다.">
+            <div class="sound-view-switch" role="group" aria-label="사운드 시각화 선택" title="저음은 베이스, 중음은 화음, 고음은 선율에 기여한 단어의 색입니다. 한 연 동안 역할별 색을 유지합니다. 밝기와 파형은 전체 출력 실측값이며 악기별 소리를 분리 측정한 표시는 아닙니다.">
               <button type="button" data-sound-view="contour" aria-pressed="true">01 Contour</button>
               <button type="button" data-sound-view="scope" aria-pressed="false">02 Scope</button>
               <button type="button" data-sound-view="memory" aria-pressed="false">03 Memory</button>
             </div>
-            <p id="sound-view-description" class="sound-view-description">주파수의 윤곽 · 단어의 색과 실제 출력의 움직임</p>
+            <p id="sound-view-description" class="sound-view-description">저음·중음·고음에 담긴 단어의 색</p>
             <p id="visual-stanza" class="visual-stanza" hidden></p>
-            <canvas id="visualizer" role="img" aria-label="연이 바뀌면 고정된 점들이 부드럽게 교차 전환됩니다. 점의 밝기는 대응 주파수 대역에 반응하며 단어별 독립 재생 표시는 아닙니다. 아래 12밴드는 실제 전체 음악 출력을 보여줍니다."></canvas>
+            <canvas id="visualizer" role="img" aria-label="저음·중음·고음의 역할별 단어 색과 실제 전체 오디오 출력의 움직임"></canvas>
             <div class="visual-caption" aria-label="문장에서 읽은 악기 파라미터">
               <div class="micro-dial" style="--dial-color: #ef5b53">
                 <i class="micro-dial__knob" id="dial-warmth"></i><span><small>TONE</small><b id="dial-warmth-value">50</b></span>

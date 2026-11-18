@@ -34,8 +34,11 @@ export function barEvents(pattern) {
 }
 
 export function wordSources(analysis, indices) {
+  const meanings = new Map((analysis.tokenMeanings ?? []).map(word => [word.token,word]));
   const spans = [...analysis.text.matchAll(/[가-힣a-z0-9]+/giu)].map(match => ({
     start:match.index, end:match.index + match[0].length, token:match[0].toLowerCase(),
+    sourceLayer:meanings.get(match[0].toLowerCase())?.layer,
+    traits:meanings.get(match[0].toLowerCase())?.traits ?? {},
   }));
   return indices ? [...new Set(indices)].map(index => spans[index]).filter(Boolean)
     : spans.filter(word => analysis.tokens.includes(word.token));

@@ -13,8 +13,9 @@ export function mapWordCues(score, text, words) {
     const match = source => {
       if (mapped.has(source.start)) return mapped.get(source.start);
       const sameToken = candidates.filter(word => word.text.toLowerCase() === source.token);
-      const word = sameToken.find(word => word.start - displayed.start === source.start)
+      const displayedWord = sameToken.find(word => word.start - displayed.start === source.start)
         ?? (sameToken.length === 1 ? sameToken[0] : null);
+      const word = displayedWord ? {...displayedWord,sourceLayer:source.sourceLayer,traits:source.traits ?? {}} : null;
       mapped.set(source.start, word);
       return word;
     };
@@ -23,46 +24,52 @@ export function mapWordCues(score, text, words) {
 }
 
 const tail = .12;
-const barPlans = new WeakMap();
+const rolePlans = new WeakMap();
+const voiceBands = {bass:'low',harmony:'mid',melody:'high',sparkle:'high',relation:'high'};
+const trait = (word,key) => Math.max(-1,Math.min(1,Number(word.traits?.[key]) || 0));
+function roleAffinity(word,band) {
+  if (band === 'low') return (word.sourceLayer === 'far' ? .9 : 0) + trait(word,'space')*.3 - trait(word,'motion')*.2;
+  if (band === 'mid') return trait(word,'softness')*.5 + trait(word,'space')*.3 + trait(word,'warmth')*.15;
+  return (word.sourceLayer === 'near' ? .9 : 0) + trait(word,'light')*.3 + trait(word,'motion')*.25;
+}
 function plansFor(cues) {
-  if (barPlans.has(cues)) return barPlans.get(cues);
-  const plans = Array.from({length:4}, (_,bar) => {
-    const layers = {melody:new Map(),bass:new Map(),relation:new Map()};
-    for (const cue of cues) {
-      if (cue.start >= bar+1 || cue.start+cue.duration+tail <= bar || !layers[cue.layer]) continue;
-      const layer = layers[cue.layer];
-      for (const source of cue.sources) {
-        let entry = layer.get(source.start);
-        if (!entry) { entry={word:source,layer:cue.layer,cues:[]}; layer.set(source.start,entry); }
-        if (entry.cues.at(-1)!==cue) entry.cues.push(cue);
-      }
+  if (rolePlans.has(cues)) return rolePlans.get(cues);
+  const pools = {low:new Map(),mid:new Map(),high:new Map()};
+  for (const cue of cues) {
+    const band = voiceBands[cue.layer];
+    if (!band) continue;
+    for (const source of cue.sources) {
+      let entry = pools[band].get(source.start);
+      if (!entry) { entry={word:source,band,layer:cue.layer,cues:[]}; pools[band].set(source.start,entry); }
+      if (entry.cues.at(-1)!==cue) entry.cues.push(cue);
     }
-    return Object.fromEntries(Object.entries(layers).map(([name,entries]) =>
-      [name,[...entries.values()].sort((a,b)=>a.word.start-b.word.start)]));
-  });
-  barPlans.set(cues,plans);
-  return plans;
+  }
+  const plan = [];
+  for (const band of ['low','mid','high']) {
+    const ranked = [...pools[band].values()].map(entry=>({...entry,affinity:roleAffinity(entry.word,band)}))
+      .sort((a,b)=>b.affinity-a.affinity || a.word.start-b.word.start);
+    if (!ranked.length) continue;
+    // Prefer another genuine contributor/color when equally appropriate. A lone
+    // source may legitimately color several roles; do not invent replacement hues.
+    const comparable = ranked.filter(entry=>entry.affinity >= ranked[0].affinity-.4);
+    const distinctWord = entry=>!plan.some(chosen=>chosen.word.start===entry.word.start);
+    const distinctColor = entry=>!plan.some(chosen=>chosen.word.color===entry.word.color);
+    plan.push(comparable.find(entry=>distinctWord(entry) && distinctColor(entry))
+      ?? comparable.find(distinctWord) ?? ranked[0]);
+  }
+  rolePlans.set(cues,plan);
+  return plan;
 }
 
-// Hold a pair of contributors for the full bar, including the spaces between
-// notes. Only their activity follows real gates; names never shuffle on a rest.
-// These are contributors to voices, not isolated word-to-note audio stems.
+// Fixed instrument/register roles for the entire stanza, including later loops.
+// Only real gates change activity. These are voice contributors, not audio stems.
 export function soundingWords(sections, cycle) {
   if (!sections.length || !Number.isFinite(cycle) || cycle < 0) return [];
   const { index } = stanzaPosition(cycle, sections.length);
   const phase = cycle % 4;
-  const bar = Math.floor(phase);
-  const phrase = Math.floor(cycle / (sections.length * 4)) * 4 + bar;
   const cues = sections[index];
   if (!cues?.length) return [];
-  const pools = plansFor(cues)[bar];
-  const firstPool = pools.melody.length ? pools.melody : pools.bass.length ? pools.bass : pools.relation;
-  if (!firstPool.length) return [];
-  const first = firstPool[phrase % firstPool.length];
-  const secondPool = [pools.bass,pools.relation,pools.melody]
-    .map(pool=>pool.filter(entry=>entry.word.start!==first.word.start)).find(pool=>pool.length);
-  const second = secondPool?.[phrase % secondPool.length];
-  return [first,second].filter(Boolean).map(entry => {
+  return plansFor(cues).map(entry => {
     let activity = 0;
     for (const cue of entry.cues) {
       const elapsed = phase-cue.start;
@@ -70,6 +77,6 @@ export function soundingWords(sections, cycle) {
       activity = Math.max(activity,elapsed < cue.duration ? .65+.35*Math.exp(-elapsed*12)
         : .65*(1-(elapsed-cue.duration)/tail));
     }
-    return {...entry.word,activity,layer:entry.layer};
+    return {...entry.word,activity,layer:entry.layer,band:entry.band};
   });
 }

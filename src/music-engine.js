@@ -83,11 +83,12 @@ export function createStrudelCode(analysis, beat = {}, { foundation, nextFoundat
   const padCutoff = `sine.slow(${ambient.breath}).range(${Math.round(550 + analysis.axes.light * 350)},${Math.round(1000 + analysis.axes.light * 850)})`;
   const bassBars = chords.map((root) => root + ' ~ ~ ~ ' + root + ' ~ ' + (richness > 0.65 ? root + 4 : '~') + ' ~');
   const bass = alternate(bassBars);
+  const sparkleBars = chords.map((root) => '~ ~ ' + (root + 11) + ' ~ ~ ~ ' + (root + 9) + ' ~');
   const parts = [
     'n("' + alternate(phrasedMelody) + '").scale("' + scale + '").s("' + (tension ? 'sawtooth' : 'triangle') + '").lpf(' + Math.round(cutoff + tension * 900) + ').attack(' + attack + ').decay(.22).sustain(.12).release(' + (tension ? '.14' : '.35') + ').room(' + room + ').delay(.12).delaytime(.375).delayfeedback(.22).gain(' + gain(arrangement.melodyGain * (1 - tension * .3)) + ')',
     'n("' + chordPattern + '").scale("' + padScale + '").s("triangle").hpf(180).lpf(' + padCutoff + ').attack(.65).decay(.5).sustain(.45).release(.8).room(' + room + ').pan(sine.slow(' + (ambient.breath * 2) + ').range(.38,.62)).gain(' + gain(arrangement.padGain * .8) + ')',
     'n("' + bass + '").scale("' + bassScale + '").s("sine").lpf(430).attack(.015).decay(.24).sustain(.1).release(.12).gain(' + gain(arrangement.bassGain) + ')',
-    'n("' + alternate(chords.map((root) => '~ ~ ' + (root + 11) + ' ~ ~ ~ ' + (root + 9) + ' ~')) + '").scale("' + scale + '").s("sine").attack(.01).decay(.1).sustain(0).release(.18).room(.4).gain(' + gain(arrangement.sparkleGain) + ')',
+    'n("' + alternate(sparkleBars) + '").scale("' + scale + '").s("sine").attack(.01).decay(.1).sustain(0).release(.18).room(.4).gain(' + gain(arrangement.sparkleGain) + ')',
   ];
   // The visible layers correspond to voices that are actually present.
   if (analysis.tokens.length < 6) parts.splice(3, 1);
@@ -106,7 +107,10 @@ export function createStrudelCode(analysis, beat = {}, { foundation, nextFoundat
   if (patch.modules.length > 1) {
     parts.splice(0, 1, ...compileModularVoices(patch, { chords, root, scale:arrangement.scale, onVoice }));
   } else onVoice?.({bars:phrasedMelody,layer:'melody'});
+  // A chord is one shared envelope event even though it contains several pitches.
+  if (analysis.tokens.length >= 2) onVoice?.({bars:ambient.voicings.map(notes => notes.join(',')),layer:'harmony'});
   if (analysis.tokens.length >= 3) onVoice?.({bars:bassBars,layer:'bass'});
+  if (analysis.tokens.length >= 6) onVoice?.({bars:sparkleBars,layer:'sparkle'});
   if (arrangement.relationGain) {
     const sourceSteps = Array.from({length:16},() => []);
     arrangement.responseEdges.forEach((edge,index) => {

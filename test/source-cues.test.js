@@ -19,19 +19,34 @@ test('cue timing agrees with Strudel weighted notes, nested beats and rests', ()
   }
 });
 
-test('collecting provenance does not change generated sound, and absent bass has no cues', () => {
-  for (const text of ['달빛','달빛 바다','달빛 바다 물결','달빛이 비친다. 바다가 흐른다.']) {
+test('collecting provenance does not change generated sound, and absent instrument voices have no cues', () => {
+  for (const text of ['달빛','달빛 바다','달빛 바다 물결','달빛이 비친다. 바다가 흐른다.','달빛 바다 물결 햇살 사랑 꽃']) {
     const analysis = analyzeText(text); analysis.syntax = analyzeSyntax(text);
     const voices = [];
     assert.equal(createStrudelCode(analysis,{}, {onVoice:voice => voices.push(voice)}),createStrudelCode(analysis));
     const cues = createSourceCues(analysis,voices);
     assert.equal(cues.some(cue => cue.layer === 'bass'),analysis.tokens.length>=3);
+    assert.equal(cues.some(cue => cue.layer === 'harmony'),analysis.tokens.length>=2);
+    assert.equal(cues.some(cue => cue.layer === 'sparkle'),analysis.tokens.length>=6);
     assert.ok(cues.length>0 && cues.length<=640);
     for (const cue of cues) {
       assert.ok(cue.start>=0 && cue.start+cue.duration<=4);
-      for (const source of cue.sources) assert.equal(text.slice(source.start,source.end).toLowerCase(),source.token);
+      for (const source of cue.sources) {
+        assert.equal(text.slice(source.start,source.end).toLowerCase(),source.token);
+        const meaning=analysis.tokenMeanings.find(word=>word.token===source.token);
+        if (meaning) { assert.equal(source.sourceLayer,meaning.layer); assert.deepEqual(source.traits,meaning.traits); }
+      }
     }
   }
+});
+
+test('harmony chord and sparkle cues use the actual emitted gate lengths',()=>{
+  const analysis=analyzeText('달빛 바다 물결 햇살 사랑 꽃'), voices=[];
+  createStrudelCode(analysis,{}, {onVoice:voice=>voices.push(voice)});
+  const cues=createSourceCues(analysis,voices);
+  assert.deepEqual(cues.filter(c=>c.layer==='harmony').map(c=>[c.start,c.duration]),[[0,1],[1,1],[2,1],[3,1]]);
+  assert.deepEqual(cues.filter(c=>c.layer==='sparkle').map(c=>[c.start,c.duration]),
+    [0,1,2,3].flatMap(bar=>[[bar+.25,.125],[bar+.75,.125]]));
 });
 
 test('modular voice provenance follows its source sentence and relation notes follow endpoints', () => {

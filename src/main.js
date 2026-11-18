@@ -150,7 +150,7 @@ analysis.scale = initialArrangement.scale;
 let code = createStrudelCode(analysis, beat);
 const visualizer = new Visualizer(elements.canvas, analysis);
 visualizer.spectrum = spectrum;
-const viewDescriptions = { contour:'주파수의 윤곽 · 단어의 색과 실제 출력의 움직임', scope:'출력 파형 · 단어의 색으로 이어지는 소리', memory:'주파수의 잔상 · 단어의 색이 소리와 함께 남아요' };
+const viewDescriptions = { contour:'저음·중음·고음에 담긴 단어의 색', scope:'세 소리의 색이 섞인 전체 출력 파형', memory:'아래는 저음, 위는 고음 · 소리마다 남는 색' };
 document.querySelectorAll('[data-sound-view]').forEach(button => {
   button.addEventListener('click', () => {
     visualizer.setMode(button.dataset.soundView);
@@ -365,7 +365,14 @@ function updateWordPlayback(now) {
   }
   const cycle = engine.playing ? engine.repl?.scheduler.now() ?? 0 : 0;
   const stanza = engine.playing ? stanzaPosition(cycle,mappedCues.length).index : -1;
-  playbackWords = engine.playing ? soundingWords(mappedCues,cycle) : [];
+  const roleWords = engine.playing ? soundingWords(mappedCues,cycle) : [];
+  // A short poem can use the same word in several voices. Its text/video accent
+  // follows the strongest active role; the graph retains all three band slots.
+  const uniqueWords = new Map();
+  for (const word of roleWords) {
+    if (!uniqueWords.has(word.start) || uniqueWords.get(word.start).activity < word.activity) uniqueWords.set(word.start,word);
+  }
+  playbackWords = [...uniqueWords.values()];
   const nextNodes = new Set();
   for (const word of playbackWords) {
     const node = wordNodes.get(word.start);
@@ -379,7 +386,7 @@ function updateWordPlayback(now) {
     node.style.removeProperty('--word-activity');
   }
   soundingNodes = nextNodes;
-  visualizer.soundViews.setPlaybackWords(engine.playing ? playbackWords : null,now,
+  visualizer.soundViews.setPlaybackWords(engine.playing ? roleWords : null,now,
     stanza !== playbackStanza ? visualizer.transitionDuration : 800,visualizer.reducedMotion);
   playbackStanza = stanza;
 }
