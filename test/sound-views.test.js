@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SoundViews } from '../src/sound-views.js';
+import { SoundViews, SOUND_VIEWS, linkedWords } from '../src/sound-views.js';
 
 function context() {
   const points = [], labels = [];
@@ -24,4 +24,20 @@ test('history stays bounded and reads at most 15 rows a second', () => {
   for(let now=0;now<1000;now++) view.draw(ctx,300,200,'memory',spectrum,now,true,false);
   assert.equal(view.cursor,15); assert.equal(view.history.length,64);
   view.reset(); assert.equal(view.cursor,0); assert.ok(view.history.every(row=>row.every(v=>v===0)));
+});
+test('word palette follows active stanza and the edited word, capped at three', () => {
+  const words = Array.from({length:6},(_,i)=>({start:i*10,end:i*10+5,text:`word${i}`,color:`#${i}${i}${i}${i}${i}${i}`}));
+  const selected = linkedWords(words,{start:20,end:60},{start:50});
+  assert.equal(selected[0].start,50); assert.equal(selected.length,3);
+  assert.ok(selected.every(w=>w.start>=20));
+  assert.ok(!linkedWords(words,{start:20,end:60},{start:0}).some(w=>w.start===0));
+  assert.deepEqual(SOUND_VIEWS,['contour','scope','memory']);
+});
+test('memory preserves historical word color rather than recoloring past sound', () => {
+  const view = new SoundViews(), ctx=context(), spectrum={read:()=>new Float32Array(12).fill(.5)};
+  view.setWords([{start:0,end:1,text:'빛',color:'#ffcc00'}],null,null);
+  view.draw(ctx,300,200,'memory',spectrum,0,true,false);
+  view.setWords([{start:0,end:1,text:'물',color:'#00cccc'}],null,null);
+  view.draw(ctx,300,200,'memory',spectrum,100,true,false);
+  assert.equal(view.colors[0],'#ffcc00'); assert.equal(view.colors[1],'#00cccc');
 });

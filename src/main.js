@@ -149,7 +149,7 @@ analysis.scale = initialArrangement.scale;
 let code = createStrudelCode(analysis, beat);
 const visualizer = new Visualizer(elements.canvas, analysis);
 visualizer.spectrum = spectrum;
-const viewDescriptions = { contour:'주파수의 윤곽 · 저음에서 고음까지', scope:'출력 파형 · 소리의 순간적인 진폭', memory:'주파수의 잔상 · 최근 약 4초의 소리', orbit:'단어의 별자리 · 기존 원형 시각화' };
+const viewDescriptions = { contour:'주파수의 윤곽 · 단어의 색과 실제 출력의 움직임', scope:'출력 파형 · 단어의 색으로 이어지는 소리', memory:'주파수의 잔상 · 단어의 색이 소리와 함께 남아요' };
 document.querySelectorAll('[data-sound-view]').forEach(button => {
   button.addEventListener('click', () => {
     visualizer.setMode(button.dataset.soundView);
@@ -346,6 +346,14 @@ function renderSemanticDetails() {
   }), !hasText ? '바다 ocean처럼 비슷한 뜻의 단어를 함께 써보세요.' : !semanticReady ? unavailable : '아직 추가된 유사어 연결이 없어요. 반복어·문법 연결은 별도로 동작합니다.');
 }
 
+let visualWords = [];
+let visualCue = null;
+let visualText = '';
+let visualEchoTimer;
+function syncWordSoundLink() {
+  const section = engine.playing ? visiblePlayingSection(elements.sentence.value, engine.score, engine.repl?.scheduler.now() ?? 0) : null;
+  visualizer.soundViews.setWords(visualWords, section, visualCue);
+}
 function renderWordHighlight() {
   const host = elements.sentenceHighlight;
   const text = elements.sentence.value;
@@ -383,6 +391,20 @@ function renderWordHighlight() {
   }
   if (cursor < text.length) host.append(document.createTextNode(text.slice(cursor)));
   if (!text || text.endsWith('\n')) host.append(document.createTextNode('\u200b'));
+  visualWords = [...host.querySelectorAll('.word-token')].map(word => ({ start:Number(word.dataset.start), end:Number(word.dataset.start)+word.textContent.length, text:word.textContent, color:word.style.getPropertyValue('--word-color') }));
+  if (text !== visualText) {
+    const caret = elements.sentence.selectionStart;
+    const word = visualWords.find(word => caret > word.start && caret <= word.end);
+    visualCue = word ? { start:word.start, born:performance.now() } : null;
+    visualText = text;
+  }
+  if (visualCue && performance.now()-visualCue.born < 700) {
+    const echoed = host.querySelector(`[data-start="${visualCue.start}"]`);
+    echoed?.classList.add('is-input-echo');
+    clearTimeout(visualEchoTimer);
+    visualEchoTimer = setTimeout(() => echoed?.classList.remove('is-input-echo'), Math.max(0,700-(performance.now()-visualCue.born)));
+  }
+  syncWordSoundLink();
   syncEditorLayout();
   scheduleRelations();
 }
@@ -539,6 +561,7 @@ function updateStanzaIndicator() {
     parts.knob.style.setProperty('--dial-angle', `${-135 + value * 2.7}deg`);
   }
   const displaySection = engine.playing ? visiblePlayingSection(elements.sentence.value, engine.score, engine.repl?.scheduler.now() ?? 0) : null;
+  syncWordSoundLink();
   for (const word of elements.sentenceHighlight.querySelectorAll('.word-token')) {
     const start = Number(word.dataset.start);
     const inside = !!displaySection && start >= displaySection.start && start < displaySection.end;

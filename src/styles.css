@@ -1434,3 +1434,9 @@ footer { min-height:28px; }
 .sound-view-switch button[aria-pressed="true"] { background:#566d67; border-color:#566d67; color:#f2f3ee; }
 .sound-view-switch button:focus-visible { outline:2px solid #c97855; outline-offset:3px; }
 .sound-view-description { margin:0 0 10px; color:#7d8981; font-size:11px; line-height:1.5; }
+.composer .word-token.is-input-echo:not(.is-other-stanza) { animation:word-input-echo .7s ease-out; }
+@keyframes word-input-echo {
+  from { box-shadow:0 2px 0 var(--word-color); background-color:color-mix(in srgb,var(--word-color) 12%,transparent); }
+  to { box-shadow:0 2px 0 transparent; background-color:transparent; }
+}
+@media(prefers-reduced-motion:reduce) { .composer .word-token.is-input-echo { animation:none; } }

@@ -301,7 +301,7 @@ export class Visualizer {
     };
     if (this.previousVisual && progress < 1) drawWords(this.previousVisual.words, 1 - blend);
     drawWords(analysis.tokenMeanings.slice(0, 12), blend);
-    if (progress >= 1) this.previousVisual = null;
+    if (this.previousVisual && time >= this.previousVisual.started + (this.transitionDuration ?? 1000)) this.previousVisual = null;
     ctx.globalAlpha = this.playing ? .2 + .8 * Math.max(0, ...(levels ?? [])) : .2;
     ctx.fillStyle = '#e8663d';
     ctx.beginPath();
@@ -522,19 +522,14 @@ export class Visualizer {
   }
 
   frame(now) {
+    if (this.previousVisual && now >= this.previousVisual.started + (this.transitionDuration ?? 1000)) this.previousVisual = null;
     if (document.hidden || !this.width || !this.height) {
       requestAnimationFrame(this.frame);
       return;
     }
     const cycle = this.getCycle(now);
     this.clear();
-    if (this.mode === 'orbit') {
-      this.drawOrbit(now, cycle);
-      this.drawGraphs(now);
-      this.drawRipples(now);
-    } else {
-      this.soundViews.draw(this.context, this.width, this.height, this.mode, this.spectrum, now, this.playing, this.reducedMotion);
-    }
+    this.soundViews.draw(this.context, this.width, this.height, this.mode, this.spectrum, now, this.playing, this.reducedMotion);
     window.dispatchEvent(new CustomEvent('formyiru:cycle', { detail: cycle }));
     requestAnimationFrame(this.frame);
   }
